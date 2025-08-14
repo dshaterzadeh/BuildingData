@@ -165,7 +165,8 @@ async def process_polygon_data(task_id: str, coordinates: List[List[float]]):
         # Step 6: Merge and enrich data
         update_progress(task_id, 85, "Merging data", "Combining data from all sources...")
         enriched_buildings = DataMerger.merge_all_data(osm_buildings, overture_data, istat_data, ape_data)
-        update_progress(task_id, 95, "Data merged", f"Successfully processed {len(enriched_buildings)} buildings")
+        building_count = len(enriched_buildings.get('features', [])) if isinstance(enriched_buildings, dict) else len(enriched_buildings)
+        update_progress(task_id, 95, "Data merged", f"Successfully processed {building_count} buildings")
         
         # Step 7: Finalize
         update_progress(task_id, 100, "Completed", "Data processing completed successfully!", enriched_buildings)

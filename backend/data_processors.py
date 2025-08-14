@@ -492,13 +492,14 @@ class ISTATProcessor:
             for b in buildings:
                 try:
                     geom = shape(b['geometry'])
+                    building_id = b.get('id') or b.get('properties', {}).get('osm_id', 'unknown')
                     buildings_data.append({
-                        'id': b['id'],
+                        'id': building_id,
                         'geometry': geom,
                         'building': b
                     })
                 except Exception as e:
-                    logger.warning(f"Invalid geometry for building {b['id']}: {e}")
+                    logger.warning(f"Invalid geometry for building {building_id}: {e}")
                     continue
             
             if not buildings_data:

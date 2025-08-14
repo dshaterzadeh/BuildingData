@@ -52,6 +52,8 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [error, setError] = useState(null)
   const [buildingPitchAngles, setBuildingPitchAngles] = useState({}) // Store custom pitch angles for each building
+  const [occupancyFactor, setOccupancyFactor] = useState(41) // Default occupancy factor: 41 m² per occupant
+  const [populationDropdownOpen, setPopulationDropdownOpen] = useState(false) // Control population estimation dropdown
 
   // Poll for progress updates
   useEffect(() => {
@@ -65,9 +67,26 @@ function App() {
           setProgress(progressData)
           
           if (progressData.status === 'completed' && progressData.data) {
-            setBuildingsData(progressData.data)
-            setProcessingTask(null)
+            console.log('Received completed data:', progressData.data)
+            try {
+              // Validate data structure
+              if (progressData.data && typeof progressData.data === 'object') {
+                setBuildingsData(progressData.data)
+                setProcessingTask(null)
+                // Close population dropdown when data is loaded
+                setPopulationDropdownOpen(false)
+              } else {
+                console.error('Invalid data structure received:', progressData.data)
+                setError('Invalid data structure received from backend')
+                setProcessingTask(null)
+              }
+            } catch (err) {
+              console.error('Error processing completed data:', err)
+              setError('Error processing data from backend')
+              setProcessingTask(null)
+            }
           } else if (progressData.status === 'error') {
+            console.error('Backend error:', progressData.message)
             setError(progressData.message)
             setProcessingTask(null)
           }
@@ -93,6 +112,7 @@ function App() {
       setSelectedCategory(null);
       setProcessingTask(null);
       setProgress(null);
+      setPopulationDropdownOpen(false); // Close dropdown when clearing data
       return;
     }
 
@@ -131,6 +151,36 @@ function App() {
 
   const handleBuildingClick = (building) => {
     setSelectedBuilding(building);
+  };
+
+  // Function to calculate population for a residential building
+  const calculatePopulation = (building) => {
+    try {
+      if (!building || !building.properties) {
+        return null;
+      }
+      
+      const properties = building.properties;
+      const category = categorizeBuilding(properties.building || 'yes');
+      
+      // Only calculate for residential buildings with floor data
+      if (category !== 'Residential' || !properties['building:levels'] || !properties['footprint_area_m2']) {
+        return null;
+      }
+      
+      const floors = parseFloat(properties['building:levels']);
+      const footprintArea = parseFloat(properties['footprint_area_m2']);
+      
+      if (floors > 0 && footprintArea > 0) {
+        const totalArea = footprintArea * floors;
+        const population = Math.round(totalArea / occupancyFactor);
+        return population;
+      }
+    } catch (error) {
+      console.error('Error calculating population:', error);
+    }
+    
+    return null;
   };
 
   // Function to update pitch angle for a building
@@ -233,6 +283,8 @@ function App() {
       'Footprint Area (m²)',
       'Roof Area (m²)',
       'Custom Pitch Angle (°)',
+      'Estimated Population',
+      'Occupancy Factor (m²/occupant)',
       'Flats',
       'Units',
       'Apartments',
@@ -262,6 +314,8 @@ function App() {
         props['footprint_area_m2'] || '',
         props['roof_area_m2'] || '',
         props.custom_pitch_angle || buildingPitchAngles[props.osm_id] || '',
+        calculatePopulation(building) || '',
+        occupancyFactor,
         props['building:flats'] || '',
         props['building:units'] || '',
         props['building:apartments'] || '',
@@ -325,9 +379,18 @@ function App() {
         selected_category: selectedCategory || 'All',
         data_sources: buildingsData.metadata?.data_sources || ['osm'],
         avg_completeness: buildingsData.metadata?.avg_data_completeness || 0,
-        custom_pitch_angles: buildingPitchAngles
+        custom_pitch_angles: buildingPitchAngles,
+        occupancy_factor: occupancyFactor,
+        population_estimation_enabled: true
       },
-      buildings: buildingsToExport
+      buildings: buildingsToExport.map(building => ({
+        ...building,
+        properties: {
+          ...building.properties,
+          estimated_population: calculatePopulation(building),
+          occupancy_factor_used: occupancyFactor
+        }
+      }))
     };
 
     // Convert to JSON string with pretty formatting
@@ -866,6 +929,22 @@ function App() {
                 <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#388e3c' }}>{properties['building:rooms']}</div>
               </div>
             )}
+            
+            {calculatePopulation(building) && (
+              <div style={{ 
+                backgroundColor: '#e1f5fe', 
+                padding: '12px', 
+                borderRadius: '8px',
+                textAlign: 'center',
+                border: '1px solid #b3e5fc'
+              }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>👥 Estimated Population</div>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0277bd' }}>{calculatePopulation(building)}</div>
+                <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>
+                  ({occupancyFactor} m²/occupant)
+                </div>
+              </div>
+            )}
           </div>
           
           {/* Additional Height Info */}
@@ -1196,6 +1275,115 @@ function App() {
           </p>
         </div>
 
+        {/* Occupancy Factor Input */}
+        <div style={{
+          backgroundColor: 'white',
+          padding: '15px',
+          borderRadius: '12px',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+          marginBottom: '15px',
+          flexShrink: 0,
+          width: '100%',
+          boxSizing: 'border-box'
+        }}>
+          <div 
+            style={{ 
+              fontSize: '16px', 
+              fontWeight: '600',
+              color: '#2c3e50',
+              marginBottom: populationDropdownOpen ? '10px' : '0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onClick={() => setPopulationDropdownOpen(!populationDropdownOpen)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              👥 Population Estimation
+            </div>
+            <div style={{ 
+              fontSize: '14px',
+              color: '#6c757d',
+              fontWeight: '500'
+            }}>
+              {occupancyFactor} m²/occupant
+            </div>
+            <div style={{
+              fontSize: '18px',
+              color: '#6c757d',
+              transition: 'transform 0.2s ease',
+              transform: populationDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+            }}>
+              ▼
+            </div>
+          </div>
+          
+          {populationDropdownOpen && (
+            <div style={{ 
+              borderTop: '1px solid #e9ecef',
+              paddingTop: '15px',
+              marginTop: '10px'
+            }}>
+              <div style={{ 
+                fontSize: '13px', 
+                color: '#6c757d',
+                marginBottom: '15px',
+                lineHeight: '1.4'
+              }}>
+                The building data generator has no access to census data. Please provide occupancy factor values so the application can provide an estimation of the population for each building.
+              </div>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: '10px',
+                width: '100%'
+              }}>
+                <label style={{
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#495057',
+                  whiteSpace: 'nowrap'
+                }}>
+                  Occupancy Factor:
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="200"
+                  step="0.5"
+                  value={occupancyFactor}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value);
+                    if (!isNaN(value) && value > 0) {
+                      setOccupancyFactor(value);
+                    }
+                  }}
+                  style={{
+                    flex: '1',
+                    padding: '8px 12px',
+                    border: '1px solid #ced4da',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#007bff'}
+                  onBlur={(e) => e.target.style.borderColor = '#ced4da'}
+                />
+                <span style={{
+                  fontSize: '14px',
+                  color: '#6c757d',
+                  whiteSpace: 'nowrap'
+                }}>
+                  m² per occupant
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Loading indicator when processing */}
         {processingTask && !buildingsData && (
           <div style={{
@@ -1431,6 +1619,24 @@ function App() {
                       {Math.round(buildingsData.features.reduce((sum, b) => sum + (b.properties['footprint_area_m2'] || 0), 0))}
                     </div>
                     <div style={{ fontSize: '12px', color: '#666' }}>Total Footprint (m²)</div>
+                  </div>
+                )}
+                
+                {buildingsData.features.some(b => calculatePopulation(b)) && (
+                  <div style={{
+                    backgroundColor: '#e1f5fe',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    textAlign: 'center',
+                    border: '1px solid #b3e5fc'
+                  }}>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#0277bd' }}>
+                      {buildingsData.features.reduce((sum, b) => sum + (calculatePopulation(b) || 0), 0)}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>Total Population</div>
+                    <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>
+                      ({occupancyFactor} m²/occupant)
+                    </div>
                   </div>
                 )}
               </div>
