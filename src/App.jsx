@@ -1047,32 +1047,11 @@ function App() {
   const filteredBuildingsData = getFilteredBuildings();
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      height: '100vh', 
-      width: '100vw',
-      overflow: 'hidden',
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0
-    }}>
+    <div className="app-container">
       {/* Map Section - 70% */}
-      <div style={{ 
-        flex: '0 0 70%', 
-        height: '100vh', 
-        position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden'
-      }}>
+      <div className="map-section">
         {/* Map Container */}
-        <div style={{ 
-          flex: '1', 
-          position: 'relative',
-          minHeight: 0
-        }}>
+        <div className="map-container">
           <PolygonSelector 
             onPolygonDrawn={handlePolygonDrawn} 
             buildingsData={filteredBuildingsData}
@@ -1243,109 +1222,40 @@ function App() {
       </div>
 
       {/* Information Panel - 30% */}
-      <div style={{ 
-        flex: '0 0 30%', 
-        height: '100vh', 
-        backgroundColor: '#f8f9fa',
-        borderLeft: '2px solid #e9ecef',
-        overflowY: 'auto',
-        padding: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        minWidth: '350px',
-        marginRight: '20px',
-        boxSizing: 'border-box'
-      }}>
-        <div style={{ marginBottom: '20px', flexShrink: 0 }}>
-          <h2 style={{ 
-            margin: '0 0 10px 0', 
-            color: '#2c3e50',
-            fontSize: '24px',
-            fontWeight: '600'
-          }}>
+      <div className="info-panel">
+        <div className="info-panel-header">
+          <h2 className="info-panel-title">
             🏗️ Building Data
           </h2>
-          <p style={{ 
-            color: '#6c757d', 
-            margin: '0',
-            fontSize: '14px',
-            lineHeight: '1.4'
-          }}>
+          <p className="info-panel-description">
             Draw a polygon on the map to fetch building data. Click on buildings to see detailed information.
           </p>
         </div>
 
         {/* Occupancy Factor Input */}
-        <div style={{
-          backgroundColor: 'white',
-          padding: '15px',
-          borderRadius: '12px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-          marginBottom: '15px',
-          flexShrink: 0,
-          width: '100%',
-          boxSizing: 'border-box'
-        }}>
+        <div className="population-section">
           <div 
-            style={{ 
-              fontSize: '16px', 
-              fontWeight: '600',
-              color: '#2c3e50',
-              marginBottom: populationDropdownOpen ? '10px' : '0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
+            className={`population-header ${populationDropdownOpen ? 'open' : ''}`}
             onClick={() => setPopulationDropdownOpen(!populationDropdownOpen)}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="population-title">
               👥 Population Estimation
             </div>
-            <div style={{ 
-              fontSize: '14px',
-              color: '#6c757d',
-              fontWeight: '500'
-            }}>
+            <div className="population-factor-display">
               {occupancyFactor} m²/occupant
             </div>
-            <div style={{
-              fontSize: '18px',
-              color: '#6c757d',
-              transition: 'transform 0.2s ease',
-              transform: populationDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)'
-            }}>
+            <div className={`population-arrow ${populationDropdownOpen ? 'open' : ''}`}>
               ▼
             </div>
           </div>
           
           {populationDropdownOpen && (
-            <div style={{ 
-              borderTop: '1px solid #e9ecef',
-              paddingTop: '15px',
-              marginTop: '10px'
-            }}>
-              <div style={{ 
-                fontSize: '13px', 
-                color: '#6c757d',
-                marginBottom: '15px',
-                lineHeight: '1.4'
-              }}>
+            <div className="population-content">
+              <div className="population-description">
                 The building data generator has no access to census data. Please provide occupancy factor values so the application can provide an estimation of the population for each building.
               </div>
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center',
-                gap: '10px',
-                width: '100%'
-              }}>
-                <label style={{
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#495057',
-                  whiteSpace: 'nowrap'
-                }}>
+              <div className="population-input-group">
+                <label className="population-label">
                   Occupancy Factor:
                 </label>
                 <input
@@ -1360,23 +1270,9 @@ function App() {
                       setOccupancyFactor(value);
                     }
                   }}
-                  style={{
-                    flex: '1',
-                    padding: '8px 12px',
-                    border: '1px solid #ced4da',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    outline: 'none',
-                    transition: 'border-color 0.2s ease'
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = '#007bff'}
-                  onBlur={(e) => e.target.style.borderColor = '#ced4da'}
+                  className="population-input"
                 />
-                <span style={{
-                  fontSize: '14px',
-                  color: '#6c757d',
-                  whiteSpace: 'nowrap'
-                }}>
+                <span className="population-unit">
                   m² per occupant
                 </span>
               </div>
@@ -1438,7 +1334,7 @@ function App() {
         )}
 
         {/* Content Area */}
-        <div style={{ flex: '1', overflowY: 'auto', minHeight: 0, width: '100%', boxSizing: 'border-box' }}>
+        <div className="content-area">
           {/* Export Button */}
           {buildingsData && buildingsData.features && buildingsData.features.length > 0 && (
             <div style={{
