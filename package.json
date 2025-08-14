@@ -1,0 +1,75 @@
+{
+  "name": "building-data-analysis",
+  "private": false,
+  "version": "1.1.0",
+  "type": "module",
+  "description": "A powerful web application for analyzing building data from OpenStreetMap and other sources. Draw polygons on a map to fetch comprehensive building information including heights, areas, and energy classifications.",
+  "keywords": [
+    "building-analysis",
+    "openstreetmap",
+    "geospatial",
+    "react",
+    "fastapi",
+    "mapping",
+    "data-visualization",
+    "gis",
+    "urban-planning",
+    "real-estate"
+  ],
+  "author": {
+    "name": "Building Data Analysis Team",
+    "email": "contact@buildingdataanalysis.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/building-data-analysis.git"
+  },
+  "homepage": "https://github.com/yourusername/building-data-analysis#readme",
+  "bugs": {
+    "url": "https://github.com/yourusername/building-data-analysis/issues"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "start": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-leaflet": "^4.2.1",
+    "leaflet": "^1.9.4",
+    "leaflet-draw": "^1.0.4",
+    "axios": "^1.6.2",
+    "@turf/turf": "^6.5.0",
+    "osmtogeojson": "^3.0.0-beta.4"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "vite": "^5.0.8"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
