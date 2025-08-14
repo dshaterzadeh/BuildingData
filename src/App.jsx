@@ -59,7 +59,7 @@ function App() {
 
     const pollProgress = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/progress/${processingTask}`)
+        const response = await fetch(`/api/progress/${processingTask}`)
         if (response.ok) {
           const progressData = await response.json()
           setProgress(progressData)
@@ -107,7 +107,7 @@ function App() {
       // Convert Leaflet coordinates to backend format
       const coordinates = coords.map(coord => [coord.lng, coord.lat]);
       
-      const response = await fetch('http://localhost:8000/api/process-polygon', {
+              const response = await fetch('/api/process-polygon', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

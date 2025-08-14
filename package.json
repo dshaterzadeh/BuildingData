@@ -41,14 +41,15 @@
     "start": "vite preview"
   },
   "dependencies": {
+    "@turf/turf": "^6.5.0",
+    "axios": "^1.6.2",
+    "leaflet": "^1.9.4",
+    "leaflet-draw": "^1.0.4",
+    "osmtogeojson": "^3.0.0-beta.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-leaflet": "^4.2.1",
-    "leaflet": "^1.9.4",
-    "leaflet-draw": "^1.0.4",
-    "axios": "^1.6.2",
-    "@turf/turf": "^6.5.0",
-    "osmtogeojson": "^3.0.0-beta.4"
+    "react-leaflet-draw": "^0.20.6"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
