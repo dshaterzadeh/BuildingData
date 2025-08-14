@@ -735,7 +735,7 @@ function App() {
         </div>
         
         {/* Content */}
-        <div style={{ padding: '20px' }}>
+        <div style={{ padding: '20px', textAlign: 'center' }}>
           {/* Building Type */}
           <div style={{ 
             backgroundColor: getCategoryColor(category), 
