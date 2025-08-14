@@ -767,7 +767,9 @@ function App() {
                 marginBottom: '10px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px'
+                gap: '8px',
+                textAlign: 'center',
+                justifyContent: 'center'
               }}>
                 🏠 Roof Pitch Angle
               </div>
@@ -775,7 +777,8 @@ function App() {
                 fontSize: '12px', 
                 color: '#666',
                 marginBottom: '12px',
-                lineHeight: '1.4'
+                lineHeight: '1.4',
+                textAlign: 'left'
               }}>
                 Adjust the roof pitch angle to recalculate roof area. Default: 12.5°
               </div>
