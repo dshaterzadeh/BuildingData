@@ -1060,51 +1060,23 @@ function App() {
           />
           
           {/* Legend moved to bottom-left */}
-          <div style={{
-            position: 'absolute',
-            bottom: '20px',
-            left: '20px',
-            zIndex: 1000,
-            backgroundColor: 'white',
-            padding: '15px',
-            borderRadius: '8px',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
-            maxWidth: '280px'
-          }}>
-            <div style={{ 
-              fontSize: '14px', 
-              fontWeight: '600',
-              color: '#2c3e50',
-              marginBottom: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}>
+          <div className="legend">
+            <div className="legend-title">
               🏗️ Building Types
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div className="legend-items">
               {Object.entries(categorizedBuildings).map(([category, buildings]) => (
-                <div key={category} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '12px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{
-                      width: '12px',
-                      height: '12px',
-                      backgroundColor: getCategoryColor(category.replace(/[0-9️⃣]/g, '')),
-                      borderRadius: '2px',
-                      border: '1px solid rgba(0,0,0,0.1)'
-                    }} />
-                    <span style={{ color: '#495057' }}>{category.replace(/[0-9️⃣]/g, '')}</span>
+                <div key={category} className="legend-item">
+                  <div className="legend-item-content">
+                    <div 
+                      className="legend-color"
+                      style={{
+                        backgroundColor: getCategoryColor(category.replace(/[0-9️⃣]/g, ''))
+                      }}
+                    />
+                    <span className="legend-label">{category.replace(/[0-9️⃣]/g, '')}</span>
                   </div>
-                  <span style={{ 
-                    color: '#6c757d',
-                    fontWeight: '500',
-                    fontSize: '11px'
-                  }}>
+                  <span className="legend-count">
                     {buildings.length}
                   </span>
                 </div>
@@ -1115,106 +1087,37 @@ function App() {
         
         {/* Categories Section below map */}
         {buildingsData && Object.keys(categorizedBuildings).length > 0 && (
-          <div style={{
-            minHeight: '120px',
-            backgroundColor: '#f8f9fa',
-            borderTop: '2px solid #e9ecef',
-            padding: '15px',
-            flexShrink: 0
-          }}>
-            <div style={{ 
-              fontSize: '16px', 
-              fontWeight: '600',
-              color: '#2c3e50',
-              marginBottom: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
+          <div className="categories-section">
+            <div className="categories-title">
               🏷️ Filter by Category
             </div>
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(5, 1fr)',
-              gap: '8px',
-              width: '100%'
-            }}>
+            <div className="categories-grid">
               <button
                 onClick={() => setSelectedCategory(null)}
-                style={{
-                  background: selectedCategory === null ? '#007bff' : '#ffffff',
-                  color: selectedCategory === null ? 'white' : '#495057',
-                  border: selectedCategory === null ? 'none' : '1px solid #dee2e6',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  transition: 'all 0.2s ease',
-                  boxShadow: selectedCategory === null ? '0 2px 4px rgba(0,123,255,0.2)' : '0 1px 3px rgba(0,0,0,0.1)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  minHeight: '36px',
-                  width: '100%'
-                }}
+                className={`category-filter-button ${selectedCategory === null ? 'selected' : ''}`}
               >
                 <span>📍 All Categories</span>
-                <span style={{ 
-                  backgroundColor: selectedCategory === null ? 'rgba(255,255,255,0.2)' : '#e9ecef',
-                  padding: '2px 6px',
-                  borderRadius: '10px',
-                  fontSize: '11px',
-                  fontWeight: 'bold',
-                  minWidth: '20px',
-                  textAlign: 'center'
-                }}>
+                <span className="category-filter-count">
                   {buildingsData.features.length}
                 </span>
               </button>
-              {Object.entries(categorizedBuildings).map(([category, buildings]) => (
+                            {Object.entries(categorizedBuildings).map(([category, buildings]) => (
                 <button
                   key={category}
                   onClick={() => setSelectedCategory(selectedCategory === category ? null : category)}
+                  className={`category-filter-button ${selectedCategory === category ? 'selected' : ''}`}
                   style={{
-                    background: selectedCategory === category ? '#007bff' : '#ffffff',
-                    color: selectedCategory === category ? 'white' : '#495057',
-                    border: selectedCategory === category ? 'none' : '1px solid #dee2e6',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '500',
-                    transition: 'all 0.2s ease',
-                    boxShadow: selectedCategory === category ? '0 2px 4px rgba(0,123,255,0.2)' : '0 1px 3px rgba(0,0,0,0.1)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    minHeight: '36px',
-                    width: '100%'
+                    '--category-color': getCategoryColor(category)
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <div style={{
-                      width: '6px',
-                      height: '6px',
-                      backgroundColor: selectedCategory === category ? 'white' : getCategoryColor(category),
-                      borderRadius: '50%'
-                    }} />
+                  <div className="category-filter-button-content">
+                    <div className="category-filter-dot" />
                     <span>{category.replace(/[0-9️⃣]/g, '')}</span>
                   </div>
-                  <span style={{ 
-                    backgroundColor: selectedCategory === category ? 'rgba(255,255,255,0.2)' : '#e9ecef',
-                    padding: '2px 6px',
-                    borderRadius: '10px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    minWidth: '20px',
-                    textAlign: 'center'
-                  }}>
+                  <span className="category-filter-count">
                     {buildings.length}
                   </span>
-        </button>
+                </button>
               ))}
             </div>
           </div>
@@ -1337,88 +1240,29 @@ function App() {
         <div className="content-area">
           {/* Export Button */}
           {buildingsData && buildingsData.features && buildingsData.features.length > 0 && (
-            <div style={{
-              backgroundColor: 'white',
-              padding: '15px',
-              borderRadius: '12px',
-              boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-              marginBottom: '15px',
-              width: '100%',
-              boxSizing: 'border-box'
-            }}>
-              <div style={{ 
-                fontSize: '16px', 
-                fontWeight: '600',
-                color: '#2c3e50',
-                marginBottom: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
+            <div className="export-section">
+              <div className="export-title">
                 📊 Export Data
               </div>
-              <div style={{ 
-                fontSize: '13px', 
-                color: '#6c757d',
-                marginBottom: '15px',
-                lineHeight: '1.4'
-              }}>
+              <div className="export-description">
                 Export {selectedCategory ? `${selectedCategory} buildings` : 'all buildings'} in your preferred format
               </div>
-              <div style={{ 
-                display: 'flex', 
-                gap: '10px',
-                width: '100%'
-              }}>
+              <div className="export-buttons">
                 <button
                   onClick={exportToCSV}
-                  style={{
-                    backgroundColor: '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    padding: '10px 15px',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'background-color 0.2s ease',
-                    flex: '1',
-                    justifyContent: 'center'
-                  }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = '#218838'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = '#28a745'}
+                  className="export-button"
                 >
                   📥 CSV
-                  <span style={{ fontSize: '12px', opacity: '0.9' }}>
+                  <span className="export-count">
                     ({selectedCategory ? categorizedBuildings[selectedCategory]?.length || 0 : buildingsData.features.length})
                   </span>
                 </button>
                 <button
                   onClick={exportToJSON}
-                  style={{
-                    backgroundColor: '#17a2b8',
-                    color: 'white',
-                    border: 'none',
-                    padding: '10px 15px',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'background-color 0.2s ease',
-                    flex: '1',
-                    justifyContent: 'center'
-                  }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = '#138496'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = '#17a2b8'}
+                  className="export-button json"
                 >
                   📄 JSON
-                  <span style={{ fontSize: '12px', opacity: '0.9' }}>
+                  <span className="export-count">
                     ({selectedCategory ? categorizedBuildings[selectedCategory]?.length || 0 : buildingsData.features.length})
                   </span>
                 </button>
@@ -1435,104 +1279,51 @@ function App() {
               customPitchAngle={buildingPitchAngles[selectedBuilding.properties.osm_id]}
             />
           ) : buildingsData ? (
-            <div style={{
-              backgroundColor: 'white',
-              padding: '20px',
-              borderRadius: '12px',
-              boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-              width: '100%',
-              boxSizing: 'border-box'
-            }}>
-              <div style={{ 
-                fontSize: '18px', 
-                fontWeight: '600',
-                color: '#2c3e50',
-                marginBottom: '15px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
+            <div className="data-summary">
+              <div className="data-summary-title">
                 📊 Data Summary
               </div>
               
               {/* Key Stats */}
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: '1fr 1fr', 
-                gap: '12px',
-                marginBottom: '20px'
-              }}>
-                <div style={{
-                  backgroundColor: '#e3f2fd',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  textAlign: 'center',
-                  border: '1px solid #bbdefb'
-                }}>
-                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
+              <div className="data-summary-grid">
+                <div className="data-summary-card buildings">
+                  <div className="data-summary-value buildings">
                     {buildingsData.features.length}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>Buildings</div>
+                  <div className="data-summary-label">Buildings</div>
                 </div>
                 
-                <div style={{
-                  backgroundColor: '#e8f5e8',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  textAlign: 'center',
-                  border: '1px solid #c8e6c9'
-                }}>
-                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#388e3c' }}>
+                <div className="data-summary-card completeness">
+                  <div className="data-summary-value completeness">
                     {buildingsData.metadata?.avg_data_completeness || 0}%
                   </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>Completeness</div>
+                  <div className="data-summary-label">Completeness</div>
                 </div>
                 
                 {buildingsData.features.some(b => b.properties['roof_area_m2']) && (
-                  <div style={{
-                    backgroundColor: '#fff8e1',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                    border: '1px solid #ffecb3'
-                  }}>
-                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#f57f17' }}>
+                  <div className="data-summary-card roof">
+                    <div className="data-summary-value roof">
                       {Math.round(buildingsData.features.reduce((sum, b) => sum + (b.properties['roof_area_m2'] || 0), 0))}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#666' }}>Total Roof Area (m²)</div>
+                    <div className="data-summary-label">Total Roof Area (m²)</div>
                   </div>
                 )}
                 
                 {buildingsData.features.some(b => b.properties['footprint_area_m2']) && (
-                  <div style={{
-                    backgroundColor: '#f3e5f5',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                    border: '1px solid #e1bee7'
-                  }}>
-                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#7b1fa2' }}>
+                  <div className="data-summary-card footprint">
+                    <div className="data-summary-value footprint">
                       {Math.round(buildingsData.features.reduce((sum, b) => sum + (b.properties['footprint_area_m2'] || 0), 0))}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#666' }}>Total Footprint (m²)</div>
+                    <div className="data-summary-label">Total Footprint (m²)</div>
                   </div>
                 )}
                 
                 {buildingsData.features.some(b => calculatePopulation(b)) && (
-                  <div style={{
-                    backgroundColor: '#e1f5fe',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                    border: '1px solid #b3e5fc'
-                  }}>
-                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#0277bd' }}>
-                      {buildingsData.features.reduce((sum, b) => sum + (calculatePopulation(b) || 0), 0)}
+                  <div className="data-summary-card population">
+                    <div className="data-summary-value population">
+                      {Math.round(buildingsData.features.reduce((sum, b) => sum + (calculatePopulation(b) || 0), 0))}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#666' }}>Total Population</div>
-                    <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>
-                      ({occupancyFactor} m²/occupant)
-                    </div>
+                    <div className="data-summary-label">Estimated Population</div>
                   </div>
                 )}
               </div>
@@ -1540,26 +1331,20 @@ function App() {
 
             </div>
           ) : (
-            <div style={{
-              backgroundColor: 'white',
-              padding: '40px 20px',
-              borderRadius: '12px',
-              boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-              textAlign: 'center',
-              width: '100%',
-              boxSizing: 'border-box'
-            }}>
+            <div className="data-summary">
               <div style={{ 
                 fontSize: '48px', 
                 marginBottom: '15px',
-                opacity: '0.6'
+                opacity: '0.6',
+                textAlign: 'center'
               }}>
                 🏗️
               </div>
               <div style={{ 
                 fontSize: '16px', 
                 color: '#6c757d',
-                lineHeight: '1.4'
+                lineHeight: '1.4',
+                textAlign: 'center'
               }}>
                 Draw a polygon on the map to start fetching building data
               </div>
@@ -1568,24 +1353,11 @@ function App() {
 
           {/* Error Display */}
           {error && (
-            <div style={{ 
-              backgroundColor: '#fff5f5',
-              border: '1px solid #fed7d7',
-              borderRadius: '8px',
-              padding: '15px',
-              marginTop: '20px',
-              color: '#c53030',
-              width: '100%',
-              boxSizing: 'border-box'
-            }}>
-              <div style={{ 
-                fontSize: '14px', 
-                fontWeight: '600',
-                marginBottom: '5px'
-              }}>
+            <div className="error-section">
+              <div className="error-title">
                 ⚠️ Error
               </div>
-              <div style={{ fontSize: '13px' }}>
+              <div className="error-message">
                 {error}
               </div>
             </div>
