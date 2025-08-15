@@ -4,6 +4,25 @@ import { EditControl } from 'react-leaflet-draw';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 
+// Map layer options
+const MAP_LAYERS = {
+  osm: {
+    name: 'Street Map',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors'
+  },
+  satellite: {
+    name: 'Satellite',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+  },
+  terrain: {
+    name: 'Terrain',
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenTopoMap contributors'
+  }
+};
+
 // Building type categorization (same as in App.jsx)
 const BUILDING_CATEGORIES = {
   'Residential': ['residential', 'apartments', 'house', 'detached', 'dormitory', 'terrace', 'semidetached_house'],
@@ -74,6 +93,93 @@ function ensureClosedLngLat(coords) {
   return ring;
 }
 
+// Map layer toggle component
+function MapLayerToggle({ currentLayer, onLayerChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div style={{
+      position: 'absolute',
+      top: '10px',
+      right: '10px',
+      zIndex: 1000,
+      backgroundColor: 'white',
+      borderRadius: '4px',
+      boxShadow: '0 1px 5px rgba(0,0,0,0.4)',
+      border: '2px solid rgba(0,0,0,0.2)'
+    }}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          padding: '6px 8px',
+          border: 'none',
+          backgroundColor: 'white',
+          cursor: 'pointer',
+          borderRadius: '4px',
+          fontSize: '14px',
+          fontWeight: '500',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          minWidth: '100px',
+          justifyContent: 'space-between'
+        }}
+        title="Change map layer"
+      >
+        🗺️ {MAP_LAYERS[currentLayer].name}
+        <span style={{ fontSize: '10px' }}>{isOpen ? '▲' : '▼'}</span>
+      </button>
+      
+      {isOpen && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          right: '0',
+          backgroundColor: 'white',
+          border: '1px solid #ccc',
+          borderRadius: '4px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          minWidth: '120px',
+          marginTop: '2px'
+        }}>
+          {Object.entries(MAP_LAYERS).map(([key, layer]) => (
+            <button
+              key={key}
+              onClick={() => {
+                onLayerChange(key);
+                setIsOpen(false);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '8px 12px',
+                border: 'none',
+                backgroundColor: currentLayer === key ? '#f0f0f0' : 'white',
+                cursor: 'pointer',
+                fontSize: '14px',
+                textAlign: 'left',
+                borderBottom: '1px solid #eee'
+              }}
+              onMouseEnter={(e) => {
+                if (currentLayer !== key) {
+                  e.target.style.backgroundColor = '#f8f8f8';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (currentLayer !== key) {
+                  e.target.style.backgroundColor = 'white';
+                }
+              }}
+            >
+              {layer.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Component to fit bounds when buildings data changes
 function FitBounds({ buildingsData }) {
   const map = useMap();
@@ -112,6 +218,7 @@ function FitBounds({ buildingsData }) {
 
 function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selectedBuilding }) {
   const [drawnItems, setDrawnItems] = useState(new L.FeatureGroup());
+  const [currentLayer, setCurrentLayer] = useState('osm');
   
   // Debug logging
   useEffect(() => {
@@ -223,19 +330,21 @@ function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selec
   };
 
   return (
-    <MapContainer
-      center={[45.0703, 7.6869]}
-      zoom={13}
-      style={{ height: '100%', width: '100%' }}
-      scrollWheelZoom={true}
-      doubleClickZoom={true}
-      zoomControl={true}
-      attributionControl={true}
-    >
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution="&copy; OpenStreetMap contributors"
-      />
+    <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+      <MapContainer
+        center={[45.0703, 7.6869]}
+        zoom={13}
+        style={{ height: '100%', width: '100%' }}
+        scrollWheelZoom={true}
+        doubleClickZoom={true}
+        zoomControl={true}
+        attributionControl={true}
+      >
+        <TileLayer
+          key={currentLayer}
+          url={MAP_LAYERS[currentLayer].url}
+          attribution={MAP_LAYERS[currentLayer].attribution}
+        />
       
       {/* Display buildings if available */}
       {buildingsData && buildingsData.features && buildingsData.features.length > 0 && (
@@ -268,8 +377,14 @@ function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selec
         />
       </FeatureGroup>
       
-      <FitBounds buildingsData={buildingsData} />
-    </MapContainer>
+        <FitBounds buildingsData={buildingsData} />
+      </MapContainer>
+      
+      <MapLayerToggle 
+        currentLayer={currentLayer} 
+        onLayerChange={setCurrentLayer} 
+      />
+    </div>
   );
 }
 
