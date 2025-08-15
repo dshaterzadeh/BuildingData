@@ -1025,7 +1025,31 @@ function App() {
             
             {properties.osm_id && (
               <div style={{ marginBottom: '8px', fontSize: '13px' }}>
-                <strong>🏷️ OSM ID:</strong> {properties.osm_id}
+                <strong>🏷️ OSM ID:</strong>{' '}
+                <a 
+                  href={`https://www.openstreetmap.org/${properties.osm_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: '#007bff',
+                    textDecoration: 'none',
+                    fontWeight: '500',
+                    borderBottom: '1px dotted #007bff',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.color = '#0056b3';
+                    e.target.style.borderBottomColor = '#0056b3';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.color = '#007bff';
+                    e.target.style.borderBottomColor = '#007bff';
+                  }}
+                  title="View this building on OpenStreetMap"
+                >
+                  {properties.osm_id}
+                  <span style={{ marginLeft: '4px', fontSize: '11px' }}>🔗</span>
+                </a>
               </div>
             )}
             
