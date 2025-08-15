@@ -96,6 +96,9 @@ function ensureClosedLngLat(coords) {
 // Map layer toggle component
 function MapLayerToggle({ currentLayer, onLayerChange }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+
+  const toggleOpen = () => setIsOpen(!isOpen);
 
   return (
     <div style={{
@@ -103,79 +106,127 @@ function MapLayerToggle({ currentLayer, onLayerChange }) {
       top: '10px',
       right: '10px',
       zIndex: 1000,
-      backgroundColor: 'white',
-      borderRadius: '4px',
-      boxShadow: '0 1px 5px rgba(0,0,0,0.4)',
-      border: '2px solid rgba(0,0,0,0.2)'
+      fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif'
     }}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={toggleOpen}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         style={{
-          padding: '6px 8px',
+          padding: '10px 16px',
           border: 'none',
           backgroundColor: 'white',
           cursor: 'pointer',
-          borderRadius: '4px',
+          borderRadius: '8px',
           fontSize: '14px',
-          fontWeight: '500',
+          fontWeight: '600',
           display: 'flex',
           alignItems: 'center',
-          gap: '4px',
-          minWidth: '100px',
-          justifyContent: 'space-between'
+          gap: '8px',
+          minWidth: '140px',
+          justifyContent: 'space-between',
+          boxShadow: isHovered 
+            ? '0 8px 25px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.1)' 
+            : '0 4px 12px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.08)',
+          transform: isHovered ? 'translateY(-1px)' : 'translateY(0)',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          color: '#2c3e50',
+          background: isHovered 
+            ? 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)' 
+            : 'white'
         }}
-        title="Change map layer"
+        title="Switch map view"
       >
-        🗺️ {MAP_LAYERS[currentLayer].name}
-        <span style={{ fontSize: '10px' }}>{isOpen ? '▲' : '▼'}</span>
+        <span style={{ 
+          fontSize: '16px',
+          transition: 'transform 0.2s ease'
+        }}>
+          🗺️
+        </span>
+        <span style={{ flex: 1, textAlign: 'left' }}>
+          {MAP_LAYERS[currentLayer].name}
+        </span>
+        <span style={{ 
+          fontSize: '12px',
+          color: '#64748b',
+          transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+          transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}>
+          ▼
+        </span>
       </button>
       
-      {isOpen && (
+      <div style={{
+        position: 'absolute',
+        top: '100%',
+        right: '0',
+        marginTop: '4px',
+        opacity: isOpen ? 1 : 0,
+        visibility: isOpen ? 'visible' : 'hidden',
+        transform: isOpen ? 'translateY(0) scale(1)' : 'translateY(-10px) scale(0.95)',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        transformOrigin: 'top right'
+      }}>
         <div style={{
-          position: 'absolute',
-          top: '100%',
-          right: '0',
           backgroundColor: 'white',
-          border: '1px solid #ccc',
-          borderRadius: '4px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          minWidth: '120px',
-          marginTop: '2px'
+          border: '1px solid #e2e8f0',
+          borderRadius: '8px',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05)',
+          minWidth: '160px',
+          overflow: 'hidden',
+          backdropFilter: 'blur(8px)'
         }}>
-          {Object.entries(MAP_LAYERS).map(([key, layer]) => (
-            <button
-              key={key}
-              onClick={() => {
-                onLayerChange(key);
-                setIsOpen(false);
-              }}
-              style={{
-                display: 'block',
-                width: '100%',
-                padding: '8px 12px',
-                border: 'none',
-                backgroundColor: currentLayer === key ? '#f0f0f0' : 'white',
-                cursor: 'pointer',
-                fontSize: '14px',
-                textAlign: 'left',
-                borderBottom: '1px solid #eee'
-              }}
-              onMouseEnter={(e) => {
-                if (currentLayer !== key) {
-                  e.target.style.backgroundColor = '#f8f8f8';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (currentLayer !== key) {
-                  e.target.style.backgroundColor = 'white';
-                }
-              }}
-            >
-              {layer.name}
-            </button>
-          ))}
+          {Object.entries(MAP_LAYERS).map(([key, layer], index) => {
+            const isSelected = currentLayer === key;
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  onLayerChange(key);
+                  setIsOpen(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: 'none',
+                  backgroundColor: isSelected ? '#f1f5f9' : 'white',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: isSelected ? '600' : '500',
+                  textAlign: 'left',
+                  color: isSelected ? '#1e40af' : '#374151',
+                  borderBottom: index < Object.entries(MAP_LAYERS).length - 1 ? '1px solid #f1f5f9' : 'none',
+                  transition: 'all 0.15s ease',
+                  gap: '8px'
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) {
+                    e.target.style.backgroundColor = '#f8fafc';
+                    e.target.style.color = '#1e40af';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) {
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.color = '#374151';
+                  }
+                }}
+              >
+                <span style={{ 
+                  fontSize: '12px',
+                  opacity: isSelected ? 1 : 0.6,
+                  transition: 'opacity 0.15s ease'
+                }}>
+                  {isSelected ? '✓' : ''}
+                </span>
+                <span>{layer.name}</span>
+              </button>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 }
