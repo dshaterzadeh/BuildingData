@@ -25,16 +25,17 @@ const MAP_LAYERS = {
 
 // Building type categorization (same as in App.jsx)
 const BUILDING_CATEGORIES = {
-  'Residential': ['residential', 'apartments', 'house', 'detached', 'dormitory', 'terrace', 'semidetached_house'],
+  'Residential': ['residential', 'apartments', 'house', 'detached', 'dormitory', 'terrace', 'semidetached_house', 'yes'],
   'Religious': ['church', 'chapel', 'synagogue', 'cathedral', 'basilica', 'mosque'],
   'Education': ['school', 'kindergarten', 'college'],
   'University': ['university'],
   'Hotel': ['hotel'],
   'Commercial': ['retail', 'commercial', 'office', 'supermarket', 'kiosk'],
+  'Healthcare': ['hospital', 'clinic', 'medical', 'pharmacy', 'doctors', 'dentist'],
   'Industrial/Storage': ['industrial', 'warehouse', 'shed'],
   'Transport': ['train_station', 'station', 'parking', 'garage', 'garages', 'carport', 'bridge'],
   'Cultural/Public': ['theatre', 'cinema', 'sports_hall', 'government', 'public', 'castle', 'grandstand'],
-  'Other': ['yes', 'tower', 'roof', 'ruins', 'service']
+  'Other': ['tower', 'roof', 'ruins', 'service']
 };
 
 // Function to categorize a building
@@ -56,6 +57,7 @@ const getCategoryMapColor = (category) => {
     'University': '#FF9800', // Orange
     'Hotel': '#E91E63', // Pink
     'Commercial': '#00BCD4', // Cyan
+    'Healthcare': '#FF5722', // Deep Orange
     'Industrial/Storage': '#A1887F', // Light Brown
     'Transport': '#FFC107', // Amber
     'Cultural/Public': '#8BC34A', // Light Green
@@ -103,10 +105,13 @@ function MapLayerToggle({ currentLayer, onLayerChange }) {
   return (
     <div style={{
       position: 'absolute',
-      top: '10px',
-      right: '10px',
-      zIndex: 1000,
-      fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif'
+      bottom: '20px',
+      right: '20px',
+      zIndex: 9999,
+      fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
+      pointerEvents: 'auto',
+      userSelect: 'none',
+      isolation: 'isolate'
     }}>
       <button
         onClick={toggleOpen}
@@ -133,7 +138,11 @@ function MapLayerToggle({ currentLayer, onLayerChange }) {
           color: '#2c3e50',
           background: isHovered 
             ? 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)' 
-            : 'white'
+            : 'white',
+          border: '2px solid #e2e8f0',
+          position: 'relative',
+          zIndex: 1001,
+          backdropFilter: 'blur(4px)'
         }}
         title="Switch map view"
       >
@@ -158,14 +167,14 @@ function MapLayerToggle({ currentLayer, onLayerChange }) {
       
       <div style={{
         position: 'absolute',
-        top: '100%',
+        bottom: '100%',
         right: '0',
-        marginTop: '4px',
+        marginBottom: '4px',
         opacity: isOpen ? 1 : 0,
         visibility: isOpen ? 'visible' : 'hidden',
-        transform: isOpen ? 'translateY(0) scale(1)' : 'translateY(-10px) scale(0.95)',
+        transform: isOpen ? 'translateY(0) scale(1)' : 'translateY(10px) scale(0.95)',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        transformOrigin: 'top right'
+        transformOrigin: 'bottom right'
       }}>
         <div style={{
           backgroundColor: 'white',

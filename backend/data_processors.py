@@ -12,8 +12,74 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from osmtogeojson import osmtogeojson
+from pyproj import Geod
 
 logger = logging.getLogger(__name__)
+
+def calculate_geodesic_area(building_geom: Polygon) -> float:
+    """
+    Calculate the geodesic area of a building polygon in square meters.
+    
+    This function uses the WGS84 ellipsoid and geodesic calculations for 
+    production-grade accuracy, accounting for the Earth's curvature.
+    
+    Args:
+        building_geom: Shapely Polygon geometry in WGS84 coordinates (lat/lon)
+    
+    Returns:
+        float: Area in square meters
+    """
+    try:
+        # Initialize geodesic calculator using WGS84 ellipsoid
+        geod = Geod(ellps='WGS84')
+        
+        # Extract coordinates from the polygon
+        coords = list(building_geom.exterior.coords)
+        
+        # Convert to separate lat/lon arrays for pyproj
+        lons = [coord[0] for coord in coords]
+        lats = [coord[1] for coord in coords]
+        
+        # Calculate geodesic area
+        area_m2, _ = geod.polygon_area_perimeter(lons, lats)
+        
+        # pyproj returns negative area for clockwise coordinates, so take absolute value
+        return abs(area_m2)
+        
+    except Exception as e:
+        logger.error(f"Error calculating geodesic area: {e}")
+        # Fallback to approximate calculation if geodesic fails
+        return _fallback_area_calculation(building_geom)
+
+def _fallback_area_calculation(building_geom: Polygon) -> float:
+    """
+    Fallback area calculation using centroid-based approximation.
+    This is used only if geodesic calculation fails.
+    
+    Args:
+        building_geom: Shapely Polygon geometry
+    
+    Returns:
+        float: Approximate area in square meters
+    """
+    try:
+        centroid = building_geom.centroid
+        lat = centroid.y
+        lon = centroid.x
+        
+        # Approximate meters per degree at this latitude
+        meters_per_degree_lat = 111320
+        meters_per_degree_lon = 111320 * math.cos(math.radians(lat))
+        
+        # Calculate area in square meters
+        area_degrees = building_geom.area
+        area_meters = area_degrees * meters_per_degree_lat * meters_per_degree_lon
+        
+        return area_meters
+        
+    except Exception as e:
+        logger.error(f"Error in fallback area calculation: {e}")
+        return 0.0
 
 def calculate_roof_area_factor(building_geom, properties):
     """
@@ -297,24 +363,11 @@ class OSMProcessor:
             'data_completeness': 0  # Will be calculated later
         }
         
-        # Calculate roof area and footprint area in square meters
-        # Convert geographic coordinates to approximate square meters
-        # This is a simplified calculation - for production, use a proper projection library
+        # Calculate roof area and footprint area in square meters using geodesic calculations
+        # This provides production-grade accuracy accounting for Earth's curvature
         
-        # Get the centroid to estimate the scale factor
-        centroid = building_geom.centroid
-        lat = centroid.y
-        lon = centroid.x
-        
-        # Approximate meters per degree at this latitude
-        # 1 degree latitude ≈ 111,320 meters
-        # 1 degree longitude ≈ 111,320 * cos(latitude) meters
-        meters_per_degree_lat = 111320
-        meters_per_degree_lon = 111320 * math.cos(math.radians(lat))
-        
-        # Calculate area in square meters
-        area_degrees = building_geom.area
-        area_meters = area_degrees * meters_per_degree_lat * meters_per_degree_lon
+        # Calculate geodesic area in square meters
+        area_meters = calculate_geodesic_area(building_geom)
         
         # Calculate roof area factor and convert to square meters
         roof_factor = calculate_roof_area_factor(building_geom, properties)
@@ -535,8 +588,8 @@ class ISTATProcessor:
                 properties = building['properties']
                 
                 if pd.notna(row['total_dwellings']):
-                    # Calculate estimated units based on building area and floors
-                    building_area = row['geometry'].area
+                    # Calculate estimated units based on building area and floors using geodesic area
+                    building_area = calculate_geodesic_area(row['geometry'])
                     floors = properties.get('building:levels', 1)
                     
                     # Estimate units using area and floor-based weighting
@@ -699,10 +752,12 @@ class DataMerger:
                     # Skip if conversion fails
                     pass
             
-            # Calculate total area if we have geometry
+            # Calculate total area if we have geometry using geodesic calculations
             try:
                 building_geom = shape(building['geometry'])
-                properties['footprint_area'] = round(building_geom.area, 2)
+                # Use geodesic area calculation for production-grade accuracy
+                footprint_area_m2 = calculate_geodesic_area(building_geom)
+                properties['footprint_area'] = round(footprint_area_m2, 2)
                 
                 # Calculate total floor area
                 floors = properties.get('building:levels', 1)
@@ -711,13 +766,13 @@ class DataMerger:
                     try:
                         floors = float(floors)
                         if floors > 0:
-                            properties['total_floor_area'] = round(building_geom.area * floors, 2)
+                            properties['total_floor_area'] = round(footprint_area_m2 * floors, 2)
                         else:
-                            properties['total_floor_area'] = round(building_geom.area, 2)
+                            properties['total_floor_area'] = round(footprint_area_m2, 2)
                     except (ValueError, TypeError):
-                        properties['total_floor_area'] = round(building_geom.area, 2)
+                        properties['total_floor_area'] = round(footprint_area_m2, 2)
                 else:
-                    properties['total_floor_area'] = round(building_geom.area, 2)
+                    properties['total_floor_area'] = round(footprint_area_m2, 2)
             except Exception as e:
                 logger.error(f"Error calculating building metrics: {e}")
             

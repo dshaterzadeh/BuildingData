@@ -4,16 +4,17 @@ import './App.css'
 
 // Building type categorization
 const BUILDING_CATEGORIES = {
-  'Residential': ['residential', 'apartments', 'house', 'detached', 'dormitory', 'terrace', 'semidetached_house'],
+  'Residential': ['residential', 'apartments', 'house', 'detached', 'dormitory', 'terrace', 'semidetached_house', 'yes'],
   'Religious': ['church', 'chapel', 'synagogue', 'cathedral', 'basilica', 'mosque'],
   'Education': ['school', 'kindergarten', 'college'],
   'University': ['university'],
   'Hotel': ['hotel'],
   'Commercial': ['retail', 'commercial', 'office', 'supermarket', 'kiosk'],
+  'Healthcare': ['hospital', 'clinic', 'medical', 'pharmacy', 'doctors', 'dentist'],
   'Industrial/Storage': ['industrial', 'warehouse', 'shed'],
   'Transport': ['train_station', 'station', 'parking', 'garage', 'garages', 'carport', 'bridge'],
   'Cultural/Public': ['theatre', 'cinema', 'sports_hall', 'government', 'public', 'castle', 'grandstand'],
-  'Other': ['yes', 'tower', 'roof', 'ruins', 'service']
+  'Other': ['tower', 'roof', 'ruins', 'service']
 };
 
 // Function to categorize a building
@@ -35,6 +36,7 @@ const getCategoryColor = (category) => {
     'University': '#FF9800',
     'Hotel': '#E91E63',
     'Commercial': '#00BCD4',
+    'Healthcare': '#FF5722',
     'Industrial/Storage': '#A1887F',
     'Transport': '#FFC107',
     'Cultural/Public': '#8BC34A',
