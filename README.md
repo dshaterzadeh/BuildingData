@@ -141,7 +141,7 @@ Global configuration for calculations:
 - **Healthcare**: Hospitals, clinics, medical, pharmacies, doctors, dentists
 - **Industrial/Storage**: Industrial, warehouses, sheds
 - **Transport**: Train stations, stations, parking, garages, carports, bridges
-- **Cultural/Public**: Theaters, cinemas, sports halls, government, public, castles, grandstands
+- **Cultural/Public**: Theaters, cinemas, sports halls, government, public, castles, grandstands, museums
 
 #### Special Categories
 - **Tower**: Towers

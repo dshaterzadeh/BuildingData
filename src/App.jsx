@@ -13,7 +13,7 @@ const BUILDING_CATEGORIES = {
   'Healthcare': ['hospital', 'clinic', 'medical', 'pharmacy', 'doctors', 'dentist'],
   'Industrial/Storage': ['industrial', 'warehouse', 'shed'],
   'Transport': ['train_station', 'station', 'parking', 'garage', 'garages', 'carport', 'bridge'],
-  'Cultural/Public': ['theatre', 'cinema', 'sports_hall', 'government', 'public', 'castle', 'grandstand'],
+  'Cultural/Public': ['theatre', 'cinema', 'sports_hall', 'government', 'public', 'castle', 'grandstand', 'museum'],
   'Tower': ['tower'],
   'Other': ['roof', 'ruins', 'service'],
   'Unknown': ['other', 'large_building']
