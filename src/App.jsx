@@ -634,7 +634,7 @@ function App() {
     }
 
     // Get the filtered buildings based on current filters
-    const buildingsToExport = buildingsData.features;
+    const buildingsToExport = getFilteredBuildings().features;
 
     if (buildingsToExport.length === 0) {
       alert('No buildings found for the current filters');
@@ -731,7 +731,7 @@ function App() {
     }
 
     // Get the filtered buildings based on current filters
-    const buildingsToExport = buildingsData.features;
+    const buildingsToExport = getFilteredBuildings().features;
 
     if (buildingsToExport.length === 0) {
       alert('No buildings found for the current filters');
