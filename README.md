@@ -1,6 +1,6 @@
 # Building Data Analysis Platform
 
-A comprehensive web application for analyzing building data from OpenStreetMap, featuring population estimation, building categorization, and interactive mapping.
+A comprehensive web application for analyzing building data from OpenStreetMap, featuring intelligent building type inference, population estimation, interactive mapping, and advanced data filtering capabilities.
 
 ## 🚀 Quick Start
 
@@ -51,51 +51,131 @@ The `buildclip.sh` script is your one-stop solution for running the application:
 ### Core Functionality
 - **Interactive Map**: Draw polygons to select areas for analysis
 - **Building Data**: Fetch comprehensive building information from OpenStreetMap
+- **Intelligent Building Type Inference**: Advanced classification based on OSM tags and geometry
 - **Population Estimation**: Calculate estimated population for residential buildings
-- **Building Categorization**: Automatic classification of buildings by type
+- **Advanced Filtering System**: Multi-category and metrics-based filtering
 - **Data Export**: Export building data in CSV and JSON formats
+- **Real-time Roof Area Calculation**: Dynamic roof area based on pitch angle
+- **Height Estimation**: Automatic height calculation from floor information
 
-### Population Estimation
-- **Configurable Occupancy Factor**: Default 41 m² per occupant (user-adjustable)
-- **Residential Focus**: Only calculates for residential buildings with floor data
-- **Real-time Updates**: Population estimates update immediately when changing factors
-- **Export Integration**: Population data included in all exports
+### 🧠 Intelligent Building Type Inference
 
-### Building Categories
-- **Residential**: Houses, apartments, dormitories
-- **Religious**: Churches, mosques, synagogues
-- **Education**: Schools, colleges, universities
-- **Commercial**: Offices, retail, supermarkets
-- **Industrial**: Warehouses, factories
-- **Transport**: Stations, parking, garages
-- **Cultural/Public**: Theaters, government buildings
-- **Other**: Miscellaneous building types
+The application uses advanced heuristics to classify buildings more accurately:
+
+#### Inference Rules
+1. **Tag-Based Classification**: Uses `shop`, `amenity`, `tourism` tags for commercial/public classification
+2. **Geometry-Based Classification**: Uses footprint area and building levels for residential classification
+3. **Smart Heuristics**:
+   - `<100 m² & ≤1 level` → `other`
+   - `100–1000 m² & ≤5 levels` → `residential`
+   - `>1000 m² & multiple floors` → `residential` (apartments)
+   - `>1000 m² & flat roof` → `industrial`
+   - `>1000 m² & no floor info` → `large_building`
+
+### ⚙️ Estimation Settings
+
+Global configuration for calculations:
+- **👥 Occupancy Factor**: Configurable m² per occupant (default: 41)
+- **🏠 Roof Pitch Angle**: Global default pitch angle (default: 12.5°)
+- **Individual Override**: Each building can have custom pitch angle
+- **Real-time Updates**: All calculations update instantly
+
+### 🏢 Building Categories
+
+#### Primary Categories
+- **Residential**: Houses, apartments, dormitories, detached, terrace, semidetached
+- **Religious**: Churches, chapels, synagogues, cathedrals, basilicas, mosques
+- **Education**: Schools, kindergartens, colleges
+- **University**: Universities
+- **Hotel**: Hotels
+- **Commercial**: Retail, commercial, offices, supermarkets, kiosks
+- **Healthcare**: Hospitals, clinics, medical, pharmacies, doctors, dentists
+- **Industrial/Storage**: Industrial, warehouses, sheds
+- **Transport**: Train stations, stations, parking, garages, carports, bridges
+- **Cultural/Public**: Theaters, cinemas, sports halls, government, public, castles, grandstands
+
+#### Special Categories
+- **Tower**: Towers
+- **Other**: Roofs, ruins, service buildings
+- **Unknown**: Other buildings, large buildings without floor information
+
+### 📊 Data Summary
+
+Dynamic summary that updates based on selected categories and filters:
+- **Total Buildings**: Count of buildings in selected categories
+- **Total Roof Area**: Sum of roof areas (calculated with pitch angle)
+- **Total Footprint**: Sum of building footprints
+- **Estimated Population**: Population estimate for residential buildings
+
+### 🎯 Advanced Filtering System
+
+#### Category Filtering
+- **Multiple Selection**: Select multiple categories simultaneously
+- **Dynamic Summary**: Data summary updates to reflect filtered data
+- **Export Filtered Data**: Export only selected categories
+- **Visual Feedback**: Clear indication of selected categories
+
+#### Metrics Filtering
+Advanced filtering by building metrics with multiple operators:
+- **Population**: Filter by estimated population
+- **Year**: Filter by construction year
+- **Height**: Filter by building height (actual or estimated)
+- **Floor**: Filter by number of floors
+- **Footprint**: Filter by building footprint area
+
+**Operators Available:**
+- **Greater than**: Values above specified threshold
+- **Less than**: Values below specified threshold
+- **Equal to**: Exact value matching
+- **Between**: Range-based filtering with two values
+
+**Features:**
+- **Responsive Dropdowns**: Width adjusts based on selected operator text
+- **Real-time Filtering**: Apply filters to instantly update visible buildings
+- **Combined Filters**: Multiple metrics can be applied simultaneously
+- **Reset Functionality**: Clear all filters with one click
+
+### 📤 Data Export
+
+Comprehensive export options:
+- **CSV Export**: Structured data with metadata
+- **JSON Export**: Complete GeoJSON with properties
+- **Filtered Export**: Export only selected categories and filtered data
+- **Metadata Included**: Export settings, timestamps, and processing info
+
+### 🏗️ Height Estimation
+
+Automatic height calculation when floor information is available:
+- **Formula**: `height = floors × 3 meters`
+- **Visual Indicator**: "estimated" tag shown next to calculated heights
+- **Fallback**: Uses actual height when available
+- **Integration**: Works with all filtering and display features
 
 ## 🛠️ Technical Stack
 
 ### Frontend
-- **React 18**: Modern UI framework
+- **React 18**: Modern UI framework with hooks
 - **Vite**: Fast build tool and dev server
-- **Leaflet**: Interactive mapping
-- **CSS-in-JS**: Styled components
+- **Leaflet**: Interactive mapping with polygon drawing
+- **CSS-in-JS**: Styled components and responsive design
 
 ### Backend
-- **FastAPI**: Modern Python web framework
-- **OpenStreetMap**: Building data source
-- **Shapely**: Geometric calculations
-- **GeoPandas**: Geospatial data processing
+- **FastAPI**: Modern Python web framework with async support
+- **OpenStreetMap**: Building data source via Overpass API
+- **Shapely**: Geometric calculations and area computations
+- **GeoPandas**: Geospatial data processing and analysis
 
 ### Infrastructure
-- **Docker**: Containerization
+- **Docker**: Containerization for consistent environments
 - **Docker Compose**: Multi-service orchestration
 - **Nginx**: Production web server (production mode)
 
 ## 📊 Data Sources
 
-- **OpenStreetMap**: Primary building data source
-- **Overture Maps**: Height and floor data enrichment
-- **ISTAT**: Italian census data (when available)
-- **APE**: Energy performance certificates (when available)
+- **OpenStreetMap**: Primary building data source with comprehensive tags
+- **Building Geometry**: Footprint areas, heights, and floor information
+- **Roof Data**: Pitch angles, roof shapes, and slope information
+- **Building Tags**: Original OSM tags preserved for reference
 
 ## 🔧 Development
 
@@ -123,8 +203,15 @@ npm run dev
 ├── docker-compose.dev.yml    # Development configuration
 ├── Dockerfile.frontend       # Production frontend
 ├── Dockerfile.frontend.dev   # Development frontend
+├── Dockerfile.backend        # Backend container
 ├── src/                      # React frontend source
+│   ├── App.jsx              # Main application component
+│   ├── PolygonSelector.jsx  # Map and polygon handling
+│   └── main.jsx             # Application entry point
 ├── backend/                  # FastAPI backend source
+│   ├── main.py              # FastAPI application
+│   ├── data_processors.py   # Building data processing logic
+│   └── requirements.txt     # Python dependencies
 └── README.md                 # This file
 ```
 
@@ -134,13 +221,64 @@ npm run dev
 1. Run `./buildclip.sh` (development mode)
 2. Open http://localhost:5173
 3. Draw a polygon on the map
-4. View building data and population estimates
-5. Export data as needed
+4. Configure estimation settings (optional)
+5. View building data and population estimates
+6. Filter by categories and/or metrics as needed
+7. Export data in desired format
 
 ### Population Estimation Example
 - Building: 750 m² footprint × 6 floors = 4,500 m² total area
 - Occupancy Factor: 41 m² per occupant
 - Estimated Population: 4,500 ÷ 41 = 109 occupants
+
+### Roof Area Calculation Example
+- Building: 500 m² footprint
+- Pitch Angle: 15°
+- Roof Factor: 1.0 + (0.15 × tan(15°)) = 1.04
+- Roof Area: 500 × 1.04 = 520 m²
+
+### Height Estimation Example
+- Building: 5 floors
+- Estimated Height: 5 × 3 = 15 meters
+- Display: "15m estimated"
+
+### Building Type Inference Example
+- Building with `shop=supermarket` → Commercial
+- Building with `amenity=hospital` → Healthcare
+- Building 800 m², 3 floors → Residential
+- Building 2000 m², no floors, flat roof → Industrial
+
+### Advanced Filtering Example
+- **Category Filter**: Select "Residential" and "Commercial"
+- **Metrics Filter**: Population > 100 AND Height between 10-20m
+- **Result**: Only residential and commercial buildings with population > 100 and height between 10-20m are displayed
+
+## 🎨 User Interface Features
+
+### Interactive Map
+- **Polygon Drawing**: Click to create vertices, double-click to complete
+- **Building Display**: Color-coded by category
+- **Building Selection**: Click buildings for detailed information
+- **Zoom and Pan**: Standard map navigation
+
+### Building Information Panel
+- **Basic Details**: Type, category, address
+- **Metrics**: Floors, height (actual or estimated), footprint, roof area
+- **Population**: Estimated population (residential only)
+- **Technical Details**: OSM ID, original tags, data sources
+- **Pitch Angle Control**: Adjust roof pitch for individual buildings
+
+### Advanced Filtering Interface
+- **Tabbed Interface**: Category and Metrics tabs
+- **Responsive Design**: Dropdowns adjust width based on content
+- **Real-time Updates**: Filters apply instantly
+- **Visual Feedback**: Clear indication of active filters
+
+### Estimation Settings Panel
+- **Compact Design**: Minimal interface with essential controls
+- **Global Settings**: Apply to all buildings
+- **Individual Override**: Custom settings per building
+- **Real-time Calculation**: Instant updates across the application
 
 ## 🤝 Contributing
 

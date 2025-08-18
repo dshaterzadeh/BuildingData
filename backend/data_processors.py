@@ -164,6 +164,78 @@ def calculate_roof_area_factor(building_geom, properties):
         # Return default factor as fallback
         return 1.05
 
+def infer_building_type(tags: Dict[str, Any], footprint_area_m2: float, building_geom) -> str:
+    """
+    Infer building type using improved logic based on OSM tags and geometry heuristics.
+    
+    Rules:
+    1. If not 'yes', keep the original tag
+    2. If shop, amenity, or tourism present → classify accordingly
+    3. Otherwise use geometry heuristics:
+       - <100 m² & ≤1 level → other
+       - 100–1000 m² & ≤5 levels → residential
+       - >1000 m² & multiple floors → residential (apartments)
+       - >1000 m² & flat roof & single floor → industrial
+       - >1000 m² & non-flat roof & no floor info → large_building
+       - Else → other
+    """
+    original_building_type = tags.get('building', 'yes')
+    
+    # Rule 1: If not 'yes', keep the original tag
+    if original_building_type != 'yes':
+        return original_building_type
+    
+    # Rule 2: Check for specific use tags
+    if tags.get('shop'):
+        return 'commercial'
+    elif tags.get('amenity'):
+        return 'public'
+    elif tags.get('tourism'):
+        return 'public'
+    
+    # Rule 3: Use geometry heuristics
+    # Get building levels
+    building_levels = OSMProcessor._parse_numeric(tags.get('building:levels'))
+    if building_levels is None:
+        # Try to estimate from height if available
+        height = OSMProcessor._parse_height(tags.get('height'))
+        if height:
+            building_levels = max(1, int(height / 3))  # Assume 3m per floor
+        else:
+            building_levels = 1  # Default to 1 level
+    
+    # Check roof type for flat roof detection
+    roof_angle = OSMProcessor._parse_numeric(tags.get('roof:angle'))
+    roof_slope = OSMProcessor._parse_numeric(tags.get('roof:slope'))
+    is_flat_roof = False
+    
+    if roof_angle is not None:
+        is_flat_roof = roof_angle < 5  # Less than 5 degrees is considered flat
+    elif roof_slope is not None:
+        is_flat_roof = roof_slope < 0.1  # Less than 10% slope is considered flat
+    else:
+        # Try to infer from roof type tags
+        roof_type = tags.get('roof:shape', '').lower()
+        is_flat_roof = roof_type in ['flat', 'shed', 'skillion']
+    
+    # Apply geometry heuristics
+    if footprint_area_m2 < 100 and building_levels <= 1:
+        return 'other'
+    elif 100 <= footprint_area_m2 <= 1000 and building_levels <= 5:
+        return 'residential'
+    elif footprint_area_m2 > 1000:
+        # For large buildings, check if we have floor information
+        if building_levels > 1:
+            # If it has multiple floors, it's likely residential (apartments)
+            return 'residential'
+        elif is_flat_roof:
+            return 'industrial'
+        else:
+            # Only classify as large_building if no floor info and non-flat roof
+            return 'large_building'
+    else:
+        return 'other'
+
 class OSMProcessor:
     """Handles OpenStreetMap data fetching and processing"""
     
@@ -313,14 +385,49 @@ class OSMProcessor:
         else:
             # This is a raw OSM element
             tags = element.get('tags', {})
-            osm_id = element.get('id')
+            element_id = element.get('id')
+            element_type = element.get('type', 'way')  # Default to 'way' for buildings
+            osm_id = f"{element_type}/{element_id}"
+        
+        # Ensure OSM ID has the correct format (element_type/id)
+        if osm_id and '/' not in str(osm_id):
+            # If it's just a numeric ID, assume it's a way (most buildings are ways)
+            osm_id = f"way/{osm_id}"
+        
+        # Calculate geodesic area in square meters first (needed for inference)
+        area_meters = calculate_geodesic_area(building_geom)
+        
+        # Infer building type using improved logic
+        inferred_building_type = infer_building_type(tags, area_meters, building_geom)
+        
+        # Calculate height - use actual height if available, otherwise estimate from floors
+        actual_height = self._parse_height(tags.get('height'))
+        building_levels = tags.get('building:levels')
+        
+        if actual_height:
+            height = actual_height
+            height_estimated = False
+        elif building_levels:
+            # Estimate height from floors: floor * 3 = height [m]
+            try:
+                floors = float(building_levels)
+                height = floors * 3
+                height_estimated = True
+            except (ValueError, TypeError):
+                height = None
+                height_estimated = False
+        else:
+            height = None
+            height_estimated = False
         
         properties = {
             'osm_id': osm_id,
-            'building': tags.get('building', 'yes'),
+            'building': inferred_building_type,  # Use inferred type instead of original
+            'building:original': tags.get('building', 'yes'),  # Keep original for reference
             'name': tags.get('name', ''),
-            'height': self._parse_height(tags.get('height')),
-            'building:levels': tags.get('building:levels'),
+            'height': height,
+            'height_estimated': height_estimated,
+            'building:levels': building_levels,
             'building:flats': tags.get('building:flats'),
             'building:units': tags.get('building:units'),
             'building:apartments': tags.get('building:apartments'),
@@ -359,15 +466,8 @@ class OSMProcessor:
             'leisure': tags.get('leisure'),
             'tourism': tags.get('tourism'),
             'historic': tags.get('historic'),
-            'data_sources': ['osm'],
-            'data_completeness': 0  # Will be calculated later
+            'data_sources': ['osm']
         }
-        
-        # Calculate roof area and footprint area in square meters using geodesic calculations
-        # This provides production-grade accuracy accounting for Earth's curvature
-        
-        # Calculate geodesic area in square meters
-        area_meters = calculate_geodesic_area(building_geom)
         
         # Calculate roof area factor and convert to square meters
         roof_factor = calculate_roof_area_factor(building_geom, properties)
@@ -776,22 +876,7 @@ class DataMerger:
             except Exception as e:
                 logger.error(f"Error calculating building metrics: {e}")
             
-            # Data completeness score
-            completeness_score = DataMerger._calculate_completeness_score(properties)
-            properties['data_completeness'] = completeness_score
-        
         return buildings
-    
-    @staticmethod
-    def _calculate_completeness_score(properties: Dict[str, Any]) -> float:
-        """Calculate data completeness score (0-100)"""
-        required_fields = [
-            'building', 'building:levels', 'height', 'building:units',
-            'energy_class', 'estimated_units'
-        ]
-        
-        filled_fields = sum(1 for field in required_fields if properties.get(field) is not None)
-        return round((filled_fields / len(required_fields)) * 100, 1)
     
     @staticmethod
     def _create_metadata(buildings: List[Dict], osm_buildings: List[Dict], 
@@ -807,9 +892,6 @@ class DataMerger:
         
         # Calculate statistics
         total_buildings = len(buildings)
-        avg_completeness = np.mean([
-            b['properties'].get('data_completeness', 0) for b in buildings
-        ])
         
         # Building type distribution
         building_types = {}
@@ -820,7 +902,6 @@ class DataMerger:
         return {
             'total_buildings': total_buildings,
             'data_sources_used': list(data_sources),
-            'avg_data_completeness': round(avg_completeness, 1),
             'building_type_distribution': building_types,
             'processing_timestamp': datetime.now().isoformat(),
             'source_counts': {

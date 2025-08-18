@@ -25,7 +25,7 @@ const MAP_LAYERS = {
 
 // Building type categorization (same as in App.jsx)
 const BUILDING_CATEGORIES = {
-  'Residential': ['residential', 'apartments', 'house', 'detached', 'dormitory', 'terrace', 'semidetached_house', 'yes'],
+  'Residential': ['residential', 'apartments', 'house', 'detached', 'dormitory', 'terrace', 'semidetached_house'],
   'Religious': ['church', 'chapel', 'synagogue', 'cathedral', 'basilica', 'mosque'],
   'Education': ['school', 'kindergarten', 'college'],
   'University': ['university'],
@@ -35,7 +35,9 @@ const BUILDING_CATEGORIES = {
   'Industrial/Storage': ['industrial', 'warehouse', 'shed'],
   'Transport': ['train_station', 'station', 'parking', 'garage', 'garages', 'carport', 'bridge'],
   'Cultural/Public': ['theatre', 'cinema', 'sports_hall', 'government', 'public', 'castle', 'grandstand'],
-  'Other': ['tower', 'roof', 'ruins', 'service']
+  'Tower': ['tower'],
+  'Other': ['roof', 'ruins', 'service'],
+  'Unknown': ['other', 'large_building']
 };
 
 // Function to categorize a building
@@ -61,7 +63,9 @@ const getCategoryMapColor = (category) => {
     'Industrial/Storage': '#A1887F', // Light Brown
     'Transport': '#FFC107', // Amber
     'Cultural/Public': '#8BC34A', // Light Green
-    'Other': '#9E9E9E' // Grey
+    'Tower': '#607D8B', // Blue Grey
+    'Other': '#9E9E9E', // Grey
+    'Unknown': '#9E9E9E' // Grey
   };
   return colors[category] || '#9E9E9E';
 };
@@ -247,25 +251,22 @@ function FitBounds({ buildingsData }) {
   useEffect(() => {
     if (buildingsData && buildingsData.features && buildingsData.features.length > 0) {
       try {
-        // Create a layer group to calculate bounds
-        const layerGroup = L.layerGroup();
+        // Create a feature group to calculate bounds
+        const group = L.featureGroup();
         
-        // Add each building to the layer group
+        // Add each building to the group
         buildingsData.features.forEach(feature => {
           if (feature.geometry) {
             const layer = L.geoJSON(feature);
-            layerGroup.addLayer(layer);
+            group.addLayer(layer);
           }
         });
         
-        // Get bounds from the layer group
-        const bounds = layerGroup.getBounds();
+        // Get bounds from the group
+        const bounds = group.getBounds();
         
         // Fit the map to the bounds with padding
         map.fitBounds(bounds, { padding: [20, 20] });
-        
-        // Clean up
-        layerGroup.clearLayers();
         
       } catch (error) {
         console.error('Error fitting bounds:', error);
