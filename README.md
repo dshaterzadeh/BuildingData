@@ -50,13 +50,62 @@ The `buildclip.sh` script is your one-stop solution for running the application:
 
 ### Core Functionality
 - **Interactive Map**: Draw polygons to select areas for analysis
+- **Multiple Polygon Support**: Draw and manage multiple areas simultaneously
 - **Building Data**: Fetch comprehensive building information from OpenStreetMap
 - **Intelligent Building Type Inference**: Advanced classification based on OSM tags and geometry
 - **Population Estimation**: Calculate estimated population for residential buildings
-- **Advanced Filtering System**: Multi-category and metrics-based filtering
+- **Advanced Filtering System**: Multi-category and metrics-based filtering with drawer interface
 - **Data Export**: Export building data in CSV and JSON formats
 - **Real-time Roof Area Calculation**: Dynamic roof area based on pitch angle
 - **Height Estimation**: Automatic height calculation from floor information
+
+### 🗺️ Multiple Polygon Management
+
+Advanced polygon drawing and management capabilities:
+- **Multiple Areas**: Draw multiple polygons on the map simultaneously
+- **Individual Processing**: Each polygon is processed independently for optimal performance
+- **Data Accumulation**: Building data from all polygons is merged and displayed together
+- **Polygon Management**: Dropdown interface to view and manage drawn polygons
+- **Hover Highlighting**: Hover over polygon names to highlight them on the map
+- **Individual Removal**: Remove specific polygons while keeping others
+- **Map Focus**: Map automatically focuses on newly drawn/edited polygons
+- **Progress Tracking**: Progress bar shows for each polygon being processed
+
+### 🎯 Advanced Filtering System
+
+#### Filter Drawer Interface
+- **Collapsible Design**: Filter menu can be closed to a compact badge
+- **Auto-Open**: Drawer automatically opens after first data fetch
+- **Badge Indicator**: Shows "Filter by" badge when drawer is closed
+- **Positioned Controls**: Filter badge aligned with map controls
+
+#### Category Filtering
+- **Multiple Selection**: Select multiple categories simultaneously
+- **Dynamic Summary**: Data summary updates to reflect filtered data
+- **Export Filtered Data**: Export only selected categories
+- **Visual Feedback**: Clear indication of selected categories
+
+#### Metrics Filtering
+Advanced filtering by building metrics with multiple operators:
+- **Population**: Filter by estimated population
+- **Year**: Filter by construction year
+- **Height**: Filter by building height (actual or estimated)
+- **Floor**: Filter by number of floors
+- **Footprint**: Filter by building footprint area
+
+**Operators Available:**
+- **Greater than**: Values above specified threshold
+- **Less than**: Values below specified threshold
+- **Equal to**: Exact value matching
+- **Between**: Range-based filtering with two values
+
+**Enhanced Features:**
+- **Input Validation**: Prevents negative values and invalid ranges
+- **Button States**: Apply/Reset buttons only active when there are changes
+- **Applied Filter Badges**: Green badges show active filters at bottom of menu
+- **Individual Removal**: Remove specific filters with × button
+- **Real-time Validation**: "Between" operator validates range (first ≤ second)
+- **Year Limits**: Maximum year input limited to current year
 
 ### 🧠 Intelligent Building Type Inference
 
@@ -106,34 +155,6 @@ Dynamic summary that updates based on selected categories and filters:
 - **Total Roof Area**: Sum of roof areas (calculated with pitch angle)
 - **Total Footprint**: Sum of building footprints
 - **Estimated Population**: Population estimate for residential buildings
-
-### 🎯 Advanced Filtering System
-
-#### Category Filtering
-- **Multiple Selection**: Select multiple categories simultaneously
-- **Dynamic Summary**: Data summary updates to reflect filtered data
-- **Export Filtered Data**: Export only selected categories
-- **Visual Feedback**: Clear indication of selected categories
-
-#### Metrics Filtering
-Advanced filtering by building metrics with multiple operators:
-- **Population**: Filter by estimated population
-- **Year**: Filter by construction year
-- **Height**: Filter by building height (actual or estimated)
-- **Floor**: Filter by number of floors
-- **Footprint**: Filter by building footprint area
-
-**Operators Available:**
-- **Greater than**: Values above specified threshold
-- **Less than**: Values below specified threshold
-- **Equal to**: Exact value matching
-- **Between**: Range-based filtering with two values
-
-**Features:**
-- **Responsive Dropdowns**: Width adjusts based on selected operator text
-- **Real-time Filtering**: Apply filters to instantly update visible buildings
-- **Combined Filters**: Multiple metrics can be applied simultaneously
-- **Reset Functionality**: Clear all filters with one click
 
 ### 📤 Data Export
 
@@ -220,11 +241,19 @@ npm run dev
 ### Basic Workflow
 1. Run `./buildclip.sh` (development mode)
 2. Open http://localhost:5173
-3. Draw a polygon on the map
+3. Draw one or more polygons on the map
 4. Configure estimation settings (optional)
 5. View building data and population estimates
-6. Filter by categories and/or metrics as needed
+6. Use filter drawer to filter by categories and/or metrics
 7. Export data in desired format
+
+### Multiple Polygon Workflow
+1. Draw first polygon and wait for data processing
+2. Draw additional polygons - each processes independently
+3. Use polygon dropdown to manage drawn areas
+4. Hover over polygon names to highlight them on map
+5. Remove individual polygons as needed
+6. All building data accumulates and merges automatically
 
 ### Population Estimation Example
 - Building: 750 m² footprint × 6 floors = 4,500 m² total area
@@ -256,10 +285,25 @@ npm run dev
 ## 🎨 User Interface Features
 
 ### Interactive Map
-- **Polygon Drawing**: Click to create vertices, double-click to complete
+- **Multiple Polygon Drawing**: Draw and manage multiple areas simultaneously
 - **Building Display**: Color-coded by category
 - **Building Selection**: Click buildings for detailed information
 - **Zoom and Pan**: Standard map navigation
+- **Map Layer Toggle**: Switch between different map layers
+
+### Polygon Management Interface
+- **Dropdown Menu**: Lists all drawn polygons with individual controls
+- **Hover Highlighting**: Hover to highlight polygon on map
+- **Individual Removal**: Remove specific polygons with × button
+- **Progress Tracking**: Shows processing status for each polygon
+- **Map Focus**: Automatically focuses on newly drawn areas
+
+### Filter Interface
+- **Collapsible Drawer**: Filter menu can be minimized to badge
+- **Tabbed Interface**: Category and Metrics tabs
+- **Applied Filter Badges**: Green badges show active filters
+- **Real-time Updates**: Filters apply instantly
+- **Input Validation**: Prevents invalid values and ranges
 
 ### Building Information Panel
 - **Basic Details**: Type, category, address
@@ -267,12 +311,6 @@ npm run dev
 - **Population**: Estimated population (residential only)
 - **Technical Details**: OSM ID, original tags, data sources
 - **Pitch Angle Control**: Adjust roof pitch for individual buildings
-
-### Advanced Filtering Interface
-- **Tabbed Interface**: Category and Metrics tabs
-- **Responsive Design**: Dropdowns adjust width based on content
-- **Real-time Updates**: Filters apply instantly
-- **Visual Feedback**: Clear indication of active filters
 
 ### Estimation Settings Panel
 - **Compact Design**: Minimal interface with essential controls

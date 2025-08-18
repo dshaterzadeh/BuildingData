@@ -74,7 +74,7 @@ const formatBuildingType = (buildingType) => {
 };
 
 function App() {
-  const [polygonCoords, setPolygonCoords] = useState(null)
+  const [polygonData, setPolygonData] = useState({}) // Store data for each polygon
   const [processingTask, setProcessingTask] = useState(null)
   const [progress, setProgress] = useState(null)
   const [buildingsData, setBuildingsData] = useState(null)
@@ -85,6 +85,7 @@ function App() {
   const [occupancyFactor, setOccupancyFactor] = useState(41) // Default occupancy factor: 41 m² per occupant
   const [globalPitchAngle, setGlobalPitchAngle] = useState(12.5) // Default global pitch angle: 12.5°
   const [estimationSettingsOpen, setEstimationSettingsOpen] = useState(false) // Control estimation settings dropdown
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false) // Control filter drawer
   
   // Advanced filtering state
   const [activeFilterTab, setActiveFilterTab] = useState('category') // 'category' or 'metrics'
@@ -96,6 +97,63 @@ function App() {
     footprint: { operator: 'greater_than', value1: '', value2: '' }
   })
   const [appliedMetricsFilters, setAppliedMetricsFilters] = useState(null)
+  
+  // Get current year for validation
+  const currentYear = new Date().getFullYear()
+  
+  // Check if there are any changes to apply
+  const hasChanges = () => {
+    if (!appliedMetricsFilters) {
+      return Object.values(metricsFilters).some(filter => {
+        // For 'between' operator, both values must be filled and first <= second
+        if (filter.operator === 'between') {
+          if (!filter.value1 || !filter.value2) return false
+          const v1 = parseFloat(filter.value1)
+          const v2 = parseFloat(filter.value2)
+          return !isNaN(v1) && !isNaN(v2) && v1 <= v2
+        }
+        // For other operators, at least value1 must be filled
+        return filter.value1
+      })
+    }
+    
+    return Object.keys(metricsFilters).some(key => {
+      const current = metricsFilters[key]
+      const applied = appliedMetricsFilters[key]
+      
+      // Check if values have changed
+      const valuesChanged = current.value1 !== applied.value1 || 
+                           current.value2 !== applied.value2 || 
+                           current.operator !== applied.operator
+      
+      if (!valuesChanged) return false
+      
+      // Additional validation for 'between' operator
+      if (current.operator === 'between') {
+        if (!current.value1 || !current.value2) return false
+        const v1 = parseFloat(current.value1)
+        const v2 = parseFloat(current.value2)
+        return !isNaN(v1) && !isNaN(v2) && v1 <= v2
+      }
+      
+      // For other operators, at least value1 must be filled
+      return current.value1
+    })
+  }
+  
+  // Check if there are any applied filters to reset
+  const hasAppliedFilters = () => {
+    return appliedMetricsFilters && Object.values(appliedMetricsFilters).some(filter => filter.value1 || filter.value2)
+  }
+  
+  // Helper function to check if 'between' values are valid
+  const isBetweenValid = (filter) => {
+    if (filter.operator !== 'between') return true
+    if (!filter.value1 || !filter.value2) return false
+    const v1 = parseFloat(filter.value1)
+    const v2 = parseFloat(filter.value2)
+    return !isNaN(v1) && !isNaN(v2) && v1 <= v2
+  }
 
   // Helper: check if a building matches metrics filters (uses state above)
   const buildingMatchesMetricsFilters = (building) => {
@@ -190,11 +248,54 @@ function App() {
           setProgress(progressData)
           
           if (progressData.status === 'completed' && progressData.data) {
-            console.log('Received completed data:', progressData.data)
+            console.log('Received completed data for task:', processingTask, progressData.data)
             try {
               // Validate data structure
               if (progressData.data && typeof progressData.data === 'object') {
-                setBuildingsData(progressData.data)
+                // Find which polygon this data belongs to
+                const polygonId = Object.keys(polygonData).find(id => 
+                  polygonData[id].taskId === processingTask
+                );
+                
+                if (polygonId) {
+                  // Update the polygon data with completed status and data
+                  setPolygonData(prev => ({
+                    ...prev,
+                    [polygonId]: {
+                      ...prev[polygonId],
+                      status: 'completed',
+                      data: progressData.data
+                    }
+                  }));
+                  
+                  // Merge all completed polygon data
+                  const updatedPolygonData = {
+                    ...polygonData,
+                    [polygonId]: {
+                      ...polygonData[polygonId],
+                      status: 'completed',
+                      data: progressData.data
+                    }
+                  };
+                  
+                  const allCompletedData = Object.values(updatedPolygonData)
+                    .filter(polygon => polygon.status === 'completed' && polygon.data)
+                    .map(polygon => polygon.data);
+                  
+                  console.log(`Found ${allCompletedData.length} completed polygons:`, 
+                    Object.keys(updatedPolygonData).filter(id => 
+                      updatedPolygonData[id].status === 'completed' && updatedPolygonData[id].data
+                    )
+                  );
+                  
+                  if (allCompletedData.length > 0) {
+                    // Merge all building data
+                    const mergedData = mergeBuildingData(allCompletedData);
+                    setBuildingsData(mergedData);
+                    console.log(`Merged data from ${allCompletedData.length} polygons`);
+                  }
+                }
+                
                 setProcessingTask(null)
                 // Close estimation settings dropdown when data is loaded
                 setEstimationSettingsOpen(false)
@@ -223,12 +324,92 @@ function App() {
 
     const interval = setInterval(pollProgress, 1000)
     return () => clearInterval(interval)
-  }, [processingTask])
+  }, [processingTask, polygonData])
 
-  const handlePolygonDrawn = async (coords) => {
-    // Clear all data when polygon is deleted (coords is null)
-    if (!coords) {
-      setPolygonCoords(null);
+  // Function to merge building data from multiple polygons
+  const mergeBuildingData = (dataArray) => {
+    if (dataArray.length === 1) {
+      return dataArray[0];
+    }
+    
+    try {
+      // Merge all features from all polygons
+      const allFeatures = [];
+      dataArray.forEach(data => {
+        if (data && data.features && Array.isArray(data.features)) {
+          allFeatures.push(...data.features);
+        }
+      });
+      
+      // Create merged GeoJSON structure
+      const mergedData = {
+        type: 'FeatureCollection',
+        features: allFeatures
+      };
+      
+      console.log(`Merged ${allFeatures.length} buildings from ${dataArray.length} polygons`);
+      return mergedData;
+      
+    } catch (error) {
+      console.error('Error merging building data:', error);
+      // Fallback to first dataset
+      return dataArray[0];
+    }
+  };
+
+  // Auto-open filter drawer when first polygon data is fetched
+  useEffect(() => {
+    if (buildingsData && buildingsData.features && buildingsData.features.length > 0) {
+      // Only auto-open if it's the first time we have data
+      const hasDataBefore = localStorage.getItem('hasFilterData');
+      if (!hasDataBefore) {
+        setFilterDrawerOpen(true);
+        localStorage.setItem('hasFilterData', 'true');
+      }
+    } else {
+      // Clear the flag when no data
+      localStorage.removeItem('hasFilterData');
+    }
+  }, [buildingsData]);
+
+
+
+  const handlePolygonDrawn = async (polygonsArray, polygonId = null) => {
+    // Clear all data when polygons are deleted (polygonsArray is null)
+    if (!polygonsArray) {
+      // If polygonId is provided, remove only that specific polygon
+      if (polygonId) {
+        console.log(`Removing polygon ${polygonId} from data`);
+        setPolygonData(prev => {
+          const newData = { ...prev };
+          delete newData[polygonId];
+          return newData;
+        });
+        
+        // Recalculate buildings data without the removed polygon
+        setPolygonData(prev => {
+          const newData = { ...prev };
+          delete newData[polygonId];
+          
+          // Get remaining completed polygons
+          const remainingPolygons = Object.values(newData).filter(p => p.status === 'completed' && p.data);
+          if (remainingPolygons.length > 0) {
+            const mergedData = mergeBuildingData(remainingPolygons.map(p => p.data));
+            setBuildingsData(mergedData);
+          } else {
+            // No polygons left, clear all data
+            setBuildingsData(null);
+            setSelectedBuilding(null);
+            setSelectedCategories([]);
+          }
+          
+          return newData;
+        });
+        return;
+      }
+      
+      // Clear all data when no specific polygon ID (clear all)
+      setPolygonData({});
       setError(null);
       setBuildingsData(null);
       setSelectedBuilding(null);
@@ -239,16 +420,36 @@ function App() {
       return;
     }
 
-    setPolygonCoords(coords);
+    // Handle both single polygon (backward compatibility) and multiple polygons
+    const polygons = Array.isArray(polygonsArray[0]) ? polygonsArray : [polygonsArray];
+    
+    // Ensure we have valid polygon data
+    if (!polygons || polygons.length === 0 || !polygons[0] || !Array.isArray(polygons[0])) {
+      console.error('Invalid polygon data received:', polygonsArray);
+      setError('Invalid polygon data');
+      return;
+    }
+    
+    const currentPolygon = polygons[0];
+    const currentPolygonId = polygonId || Date.now();
+    
+    // Don't update polygonCoords here - let the map component handle displaying all polygons
     setError(null);
-    setBuildingsData(null);
     setSelectedBuilding(null);
           setSelectedCategories([]);
     setProgress(null);
 
     try {
-      // Convert Leaflet coordinates to backend format
-      const coordinates = coords.map(coord => [coord.lng, coord.lat]);
+      // Convert polygon to backend format
+      const coordinates = currentPolygon.map(coord => {
+        if (!coord || typeof coord.lng !== 'number' || typeof coord.lat !== 'number') {
+          throw new Error('Invalid coordinate format');
+        }
+        return [coord.lng, coord.lat];
+      });
+      
+      console.log(`Processing polygon ${currentPolygonId} with ${coordinates.length} coordinates`);
+      console.log('Sending coordinates to backend:', coordinates);
       
               const response = await fetch('/api/process-polygon', {
         method: 'POST',
@@ -260,11 +461,58 @@ function App() {
 
       if (response.ok) {
         const result = await response.json();
+        
+        // Store the task ID for this specific polygon
+        setPolygonData(prev => {
+          const updatedData = { ...prev };
+          
+          // If this polygon already exists, clear its old data
+          if (updatedData[currentPolygonId]) {
+            console.log(`Updating existing polygon ${currentPolygonId}`);
+            // Remove old data but keep the entry for tracking
+            updatedData[currentPolygonId] = {
+              taskId: result.task_id,
+              coords: currentPolygon,
+              status: 'processing'
+            };
+          } else {
+            console.log(`Creating new polygon ${currentPolygonId}`);
+            updatedData[currentPolygonId] = {
+              taskId: result.task_id,
+              coords: currentPolygon,
+              status: 'processing'
+            };
+          }
+          
+          return updatedData;
+        });
+        
         setProcessingTask(result.task_id);
         setProgress(result);
       } else {
+        try {
         const errorData = await response.json();
-        setError(errorData.detail || 'Failed to start processing');
+          console.error('Backend error response:', errorData);
+          
+          // Handle different error response formats
+          let errorMessage = 'Failed to start processing';
+          if (errorData.detail) {
+            if (typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail;
+            } else if (Array.isArray(errorData.detail)) {
+              errorMessage = errorData.detail.map(err => err.msg || 'Validation error').join(', ');
+            } else if (typeof errorData.detail === 'object') {
+              errorMessage = errorData.detail.msg || 'Validation error';
+            }
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+          
+          setError(errorMessage);
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+          setError(`HTTP ${response.status}: Failed to start processing`);
+        }
       }
     } catch (err) {
       console.error('Error starting processing:', err);
@@ -1093,7 +1341,20 @@ function App() {
                 textAlign: 'center',
                 border: '1px solid #b3e5fc'
               }}>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>👥 Estimated Population</div>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                  👥 Population
+                  <span style={{ 
+                    fontSize: '10px', 
+                    color: '#ff9800', 
+                    marginLeft: '4px',
+                    backgroundColor: '#fff3e0',
+                    padding: '2px 4px',
+                    borderRadius: '3px',
+                    fontWeight: 'normal'
+                  }}>
+                    estimated
+                  </span>
+                </div>
                 <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0277bd' }}>{calculatePopulation(building)}</div>
                 <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>
                   ({occupancyFactor} m²/occupant)
@@ -1240,7 +1501,8 @@ function App() {
             selectedBuilding={selectedBuilding}
           />
           
-          {/* Legend moved to bottom-left */}
+          {/* Legend moved to bottom-left - only show when there's building data */}
+          {buildingsData && buildingsData.features && buildingsData.features.length > 0 && (
           <div className="legend">
             <div className="legend-title">
               🏗️ Building Types
@@ -1264,20 +1526,105 @@ function App() {
               ))}
             </div>
           </div>
+          )}
         </div>
         
-        {/* Advanced Filtering Section */}
-        {buildingsData && Object.keys(categorizedBuildings).length > 0 && (
-          <div className="categories-section">
+        {/* Filter Badge - Always visible when there's data */}
+        {buildingsData && buildingsData.features && buildingsData.features.length > 0 && !filterDrawerOpen && (
+          <div style={{
+            position: 'absolute',
+            bottom: '20px',
+            right: '391px', // Moved 5px more to the right
+            transform: 'none',
+            zIndex: 10000,
+            backgroundColor: 'white',
+            borderRadius: '50px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            border: '1px solid #e0e0e0',
+            padding: '12px 20px',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#333',
+            animation: 'filterBadgeAppear 0.5s ease-out',
+            pointerEvents: 'auto'
+          }}
+          onClick={() => {
+            console.log('Badge clicked, current state:', filterDrawerOpen);
+            setFilterDrawerOpen(true);
+            console.log('Setting filterDrawerOpen to true');
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#f8f9fa';
+            e.target.style.transform = 'scale(1.05)';
+            e.target.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = 'white';
+            e.target.style.transform = 'scale(1)';
+            e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+          }}
+          >
+            <span>🏷️</span>
+            <span>Filter by</span>
+            <span style={{ fontSize: '12px' }}>▶</span>
+          </div>
+        )}
+
+        {/* Filter Section - Original position with close functionality */}
+        {buildingsData && buildingsData.features && buildingsData.features.length > 0 && filterDrawerOpen && (
+          <div className="categories-section" style={{
+            position: 'relative',
+            zIndex: 9999,
+            overflow: 'visible'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '8px'
+            }}>
             <div className="categories-title">
               🏷️ Filter by
+              </div>
+              <button
+                onClick={() => {
+                  console.log('Close button clicked, current state:', filterDrawerOpen);
+                  setFilterDrawerOpen(false);
+                  console.log('Setting filterDrawerOpen to false');
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '18px',
+                  cursor: 'pointer',
+                  color: '#666',
+                  padding: '4px',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '24px',
+                  height: '24px'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                title="Close filters"
+              >
+                ✕
+              </button>
             </div>
             
             {/* Tab Navigation */}
             <div style={{ 
               display: 'flex', 
               borderBottom: '1px solid #e0e0e0', 
-              marginBottom: '15px',
+              marginBottom: '8px',
               backgroundColor: '#f8f9fa',
               borderRadius: '8px 8px 0 0'
             }}>
@@ -1285,14 +1632,15 @@ function App() {
                 onClick={() => setActiveFilterTab('category')}
                 style={{
                   flex: 1,
-                  padding: '12px 16px',
+                  padding: '8px 12px',
                   border: 'none',
-                  backgroundColor: activeFilterTab === 'category' ? '#007bff' : 'transparent',
+                  backgroundColor: activeFilterTab === 'category' ? '#4a90e2' : 'transparent',
                   color: activeFilterTab === 'category' ? 'white' : '#666',
                   fontWeight: activeFilterTab === 'category' ? '600' : '500',
                   cursor: 'pointer',
                   borderRadius: '8px 0 0 0',
-                  transition: 'all 0.2s ease'
+                  transition: 'all 0.2s ease',
+                  fontSize: '13px'
                 }}
               >
                 Category
@@ -1301,14 +1649,15 @@ function App() {
                 onClick={() => setActiveFilterTab('metrics')}
                 style={{
                   flex: 1,
-                  padding: '12px 16px',
+                  padding: '8px 12px',
                   border: 'none',
-                  backgroundColor: activeFilterTab === 'metrics' ? '#007bff' : 'transparent',
+                  backgroundColor: activeFilterTab === 'metrics' ? '#4a90e2' : 'transparent',
                   color: activeFilterTab === 'metrics' ? 'white' : '#666',
                   fontWeight: activeFilterTab === 'metrics' ? '600' : '500',
                   cursor: 'pointer',
                   borderRadius: '0 8px 0 0',
-                  transition: 'all 0.2s ease'
+                  transition: 'all 0.2s ease',
+                  fontSize: '13px'
                 }}
               >
                 Metrics
@@ -1359,49 +1708,32 @@ function App() {
                 
                 {activeFilterTab === 'metrics' && (
                   <div style={{ 
-                    padding: '12px',
-                    border: '1px solid #e0e0e0', 
-                    borderRadius: '6px',
+                    padding: '8px',
                     backgroundColor: '#fafafa',
-                    minHeight: '200px'
+                    minHeight: '180px',
+                    overflow: 'visible'
                   }}>
-                    {/* Filter Status Indicator */}
-                    {appliedMetricsFilters && (
-                      <div style={{ 
-                        marginBottom: '15px',
-                        padding: '8px 12px',
-                        backgroundColor: '#e3f2fd',
-                        border: '1px solid #2196f3',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        color: '#1976d2'
-                      }}>
-                        🔍 Filters Active: {Object.entries(appliedMetricsFilters)
-                          .filter(([_, filter]) => filter.value1 || filter.value2)
-                          .map(([metric, filter]) => `${metric} ${filter.operator} ${filter.value1}${filter.value2 ? `-${filter.value2}` : ''}`)
-                          .join(', ')}
-                      </div>
-                    )}
+
                     
                     {/* Metrics Filters - 6-Section Layout */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                       {/* Population */}
                       <div style={{ 
                         border: '1px solid #e0e0e0', 
                         borderRadius: '6px', 
-                        padding: '12px',
+                        padding: '8px',
                         backgroundColor: '#fafafa'
                       }}>
                         <div style={{ 
-                          fontSize: '13px', 
+                          fontSize: '12px', 
                           fontWeight: '600', 
-                          marginBottom: '8px',
+                          marginBottom: '6px',
                           color: '#333'
                         }}>
                           Population
                         </div>
                         
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                           <select
                             value={metricsFilters.population.operator}
                             onChange={(e) => {
@@ -1411,12 +1743,12 @@ function App() {
                               }));
                             }}
                             style={{
-                              padding: '4px 6px',
+                              padding: '3px 4px',
                               border: '1px solid #ddd',
                               borderRadius: '3px',
-                              fontSize: '12px',
-                              width: metricsFilters.population.operator === 'between' ? '80px' : 
-                                    metricsFilters.population.operator === 'greater_than' ? '110px' : '90px'
+                              fontSize: '11px',
+                              width: metricsFilters.population.operator === 'between' ? '70px' : 
+                                    metricsFilters.population.operator === 'greater_than' ? '95px' : '80px'
                             }}
                           >
                             <option value="greater_than">Greater than</option>
@@ -1427,20 +1759,24 @@ function App() {
                           
                           <input
                             type="number"
+                            min="0"
                             placeholder="Value"
                             value={metricsFilters.population.value1}
                             onChange={(e) => {
+                              const value = Math.max(0, parseFloat(e.target.value) || 0).toString()
                               setMetricsFilters(prev => ({
                                 ...prev,
-                                population: { ...prev.population, value1: e.target.value }
+                                population: { ...prev.population, value1: value }
                               }));
                             }}
                             style={{
-                              padding: '4px 6px',
-                              border: '1px solid #ddd',
+                              padding: '3px 4px',
+                              border: !isBetweenValid(metricsFilters.population) 
+                                ? '1px solid #ff6b6b' 
+                                : '1px solid #ddd',
                               borderRadius: '3px',
-                              fontSize: '12px',
-                              width: '60px'
+                              fontSize: '11px',
+                              width: '50px'
                             }}
                           />
                           
@@ -1449,20 +1785,24 @@ function App() {
                               <span style={{ fontSize: '11px', color: '#666' }}>and</span>
                               <input
                                 type="number"
+                                min="0"
                                 placeholder="Value"
                                 value={metricsFilters.population.value2}
                                 onChange={(e) => {
+                                  const value = Math.max(0, parseFloat(e.target.value) || 0).toString()
                                   setMetricsFilters(prev => ({
                                     ...prev,
-                                    population: { ...prev.population, value2: e.target.value }
+                                    population: { ...prev.population, value2: value }
                                   }));
                                 }}
                                 style={{
-                                  padding: '4px 6px',
-                                  border: '1px solid #ddd',
+                                  padding: '3px 4px',
+                                  border: !isBetweenValid(metricsFilters.population) 
+                                    ? '1px solid #ff6b6b' 
+                                    : '1px solid #ddd',
                                   borderRadius: '3px',
-                                  fontSize: '12px',
-                                  width: '60px'
+                                  fontSize: '11px',
+                                  width: '50px'
                                 }}
                               />
                             </>
@@ -1474,19 +1814,19 @@ function App() {
                       <div style={{ 
                         border: '1px solid #e0e0e0', 
                         borderRadius: '6px', 
-                        padding: '12px',
+                        padding: '8px',
                         backgroundColor: '#fafafa'
                       }}>
                         <div style={{ 
-                          fontSize: '13px', 
+                          fontSize: '12px', 
                           fontWeight: '600', 
-                          marginBottom: '8px',
+                          marginBottom: '6px',
                           color: '#333'
                         }}>
                           Year
                         </div>
                         
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                           <select
                             value={metricsFilters.year.operator}
                             onChange={(e) => {
@@ -1496,12 +1836,12 @@ function App() {
                               }));
                             }}
                             style={{
-                              padding: '4px 6px',
+                              padding: '3px 4px',
                               border: '1px solid #ddd',
                               borderRadius: '3px',
-                              fontSize: '12px',
-                              width: metricsFilters.year.operator === 'between' ? '80px' : 
-                                    metricsFilters.year.operator === 'greater_than' ? '110px' : '90px'
+                              fontSize: '11px',
+                              width: metricsFilters.year.operator === 'between' ? '70px' : 
+                                    metricsFilters.year.operator === 'greater_than' ? '95px' : '80px'
                             }}
                           >
                             <option value="greater_than">Greater than</option>
@@ -1512,20 +1852,24 @@ function App() {
                           
                           <input
                             type="number"
+                            max={currentYear}
                             placeholder="Value"
                             value={metricsFilters.year.value1}
                             onChange={(e) => {
+                              const value = Math.min(currentYear, Math.max(0, parseFloat(e.target.value) || 0)).toString()
                               setMetricsFilters(prev => ({
                                 ...prev,
-                                year: { ...prev.year, value1: e.target.value }
+                                year: { ...prev.year, value1: value }
                               }));
                             }}
                             style={{
-                              padding: '4px 6px',
-                              border: '1px solid #ddd',
+                              padding: '3px 4px',
+                              border: !isBetweenValid(metricsFilters.year) 
+                                ? '1px solid #ff6b6b' 
+                                : '1px solid #ddd',
                               borderRadius: '3px',
-                              fontSize: '12px',
-                              width: '60px'
+                              fontSize: '11px',
+                              width: '50px'
                             }}
                           />
                           
@@ -1534,20 +1878,24 @@ function App() {
                               <span style={{ fontSize: '11px', color: '#666' }}>and</span>
                               <input
                                 type="number"
+                                max={currentYear}
                                 placeholder="Value"
                                 value={metricsFilters.year.value2}
                                 onChange={(e) => {
+                                  const value = Math.min(currentYear, Math.max(0, parseFloat(e.target.value) || 0)).toString()
                                   setMetricsFilters(prev => ({
                                     ...prev,
-                                    year: { ...prev.year, value2: e.target.value }
+                                    year: { ...prev.year, value2: value }
                                   }));
                                 }}
                                 style={{
-                                  padding: '4px 6px',
-                                  border: '1px solid #ddd',
+                                  padding: '3px 4px',
+                                  border: !isBetweenValid(metricsFilters.year) 
+                                    ? '1px solid #ff6b6b' 
+                                    : '1px solid #ddd',
                                   borderRadius: '3px',
-                                  fontSize: '12px',
-                                  width: '60px'
+                                  fontSize: '11px',
+                                  width: '50px'
                                 }}
                               />
                             </>
@@ -1559,19 +1907,19 @@ function App() {
                       <div style={{ 
                         border: '1px solid #e0e0e0', 
                         borderRadius: '6px', 
-                        padding: '12px',
+                        padding: '8px',
                         backgroundColor: '#fafafa'
                       }}>
                         <div style={{ 
-                          fontSize: '13px', 
+                          fontSize: '12px', 
                           fontWeight: '600', 
-                          marginBottom: '8px',
+                          marginBottom: '6px',
                           color: '#333'
                         }}>
                           Height
                         </div>
                         
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                           <select
                             value={metricsFilters.height.operator}
                             onChange={(e) => {
@@ -1581,12 +1929,12 @@ function App() {
                               }));
                             }}
                             style={{
-                              padding: '4px 6px',
+                              padding: '3px 4px',
                               border: '1px solid #ddd',
                               borderRadius: '3px',
-                              fontSize: '12px',
-                              width: metricsFilters.height.operator === 'between' ? '80px' : 
-                                    metricsFilters.height.operator === 'greater_than' ? '110px' : '90px'
+                              fontSize: '11px',
+                              width: metricsFilters.height.operator === 'between' ? '70px' : 
+                                    metricsFilters.height.operator === 'greater_than' ? '95px' : '80px'
                             }}
                           >
                             <option value="greater_than">Greater than</option>
@@ -1597,20 +1945,24 @@ function App() {
                           
                           <input
                             type="number"
+                            min="0"
                             placeholder="Value"
                             value={metricsFilters.height.value1}
                             onChange={(e) => {
+                              const value = Math.max(0, parseFloat(e.target.value) || 0).toString()
                               setMetricsFilters(prev => ({
                                 ...prev,
-                                height: { ...prev.height, value1: e.target.value }
+                                height: { ...prev.height, value1: value }
                               }));
                             }}
                             style={{
-                              padding: '4px 6px',
-                              border: '1px solid #ddd',
+                              padding: '3px 4px',
+                              border: !isBetweenValid(metricsFilters.height) 
+                                ? '1px solid #ff6b6b' 
+                                : '1px solid #ddd',
                               borderRadius: '3px',
-                              fontSize: '12px',
-                              width: '60px'
+                              fontSize: '11px',
+                              width: '50px'
                             }}
                           />
                           
@@ -1619,20 +1971,24 @@ function App() {
                               <span style={{ fontSize: '11px', color: '#666' }}>and</span>
                               <input
                                 type="number"
+                                min="0"
                                 placeholder="Value"
                                 value={metricsFilters.height.value2}
                                 onChange={(e) => {
+                                  const value = Math.max(0, parseFloat(e.target.value) || 0).toString()
                                   setMetricsFilters(prev => ({
                                     ...prev,
-                                    height: { ...prev.height, value2: e.target.value }
+                                    height: { ...prev.height, value2: value }
                                   }));
                                 }}
                                 style={{
-                                  padding: '4px 6px',
-                                  border: '1px solid #ddd',
+                                  padding: '3px 4px',
+                                  border: !isBetweenValid(metricsFilters.height) 
+                                    ? '1px solid #ff6b6b' 
+                                    : '1px solid #ddd',
                                   borderRadius: '3px',
-                                  fontSize: '12px',
-                                  width: '60px'
+                                  fontSize: '11px',
+                                  width: '50px'
                                 }}
                               />
                             </>
@@ -1644,19 +2000,19 @@ function App() {
                       <div style={{ 
                         border: '1px solid #e0e0e0', 
                         borderRadius: '6px', 
-                        padding: '12px',
+                        padding: '8px',
                         backgroundColor: '#fafafa'
                       }}>
                         <div style={{ 
-                          fontSize: '13px', 
+                          fontSize: '12px', 
                           fontWeight: '600', 
-                          marginBottom: '8px',
+                          marginBottom: '6px',
                           color: '#333'
                         }}>
                           Floor
                         </div>
                         
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                           <select
                             value={metricsFilters.floor.operator}
                             onChange={(e) => {
@@ -1666,12 +2022,12 @@ function App() {
                               }));
                             }}
                             style={{
-                              padding: '4px 6px',
+                              padding: '3px 4px',
                               border: '1px solid #ddd',
                               borderRadius: '3px',
-                              fontSize: '12px',
-                              width: metricsFilters.floor.operator === 'between' ? '80px' : 
-                                    metricsFilters.floor.operator === 'greater_than' ? '110px' : '90px'
+                              fontSize: '11px',
+                              width: metricsFilters.floor.operator === 'between' ? '70px' : 
+                                    metricsFilters.floor.operator === 'greater_than' ? '95px' : '80px'
                             }}
                           >
                             <option value="greater_than">Greater than</option>
@@ -1682,20 +2038,24 @@ function App() {
                           
                           <input
                             type="number"
+                            min="0"
                             placeholder="Value"
                             value={metricsFilters.floor.value1}
                             onChange={(e) => {
+                              const value = Math.max(0, parseFloat(e.target.value) || 0).toString()
                               setMetricsFilters(prev => ({
                                 ...prev,
-                                floor: { ...prev.floor, value1: e.target.value }
+                                floor: { ...prev.floor, value1: value }
                               }));
                             }}
                             style={{
-                              padding: '4px 6px',
-                              border: '1px solid #ddd',
+                              padding: '3px 4px',
+                              border: !isBetweenValid(metricsFilters.floor) 
+                                ? '1px solid #ff6b6b' 
+                                : '1px solid #ddd',
                               borderRadius: '3px',
-                              fontSize: '12px',
-                              width: '60px'
+                              fontSize: '11px',
+                              width: '50px'
                             }}
                           />
                           
@@ -1704,20 +2064,24 @@ function App() {
                               <span style={{ fontSize: '11px', color: '#666' }}>and</span>
                               <input
                                 type="number"
+                                min="0"
                                 placeholder="Value"
                                 value={metricsFilters.floor.value2}
                                 onChange={(e) => {
+                                  const value = Math.max(0, parseFloat(e.target.value) || 0).toString()
                                   setMetricsFilters(prev => ({
                                     ...prev,
-                                    floor: { ...prev.floor, value2: e.target.value }
+                                    floor: { ...prev.floor, value2: value }
                                   }));
                                 }}
                                 style={{
-                                  padding: '4px 6px',
-                                  border: '1px solid #ddd',
+                                  padding: '3px 4px',
+                                  border: !isBetweenValid(metricsFilters.floor) 
+                                    ? '1px solid #ff6b6b' 
+                                    : '1px solid #ddd',
                                   borderRadius: '3px',
-                                  fontSize: '12px',
-                                  width: '60px'
+                                  fontSize: '11px',
+                                  width: '50px'
                                 }}
                               />
                             </>
@@ -1729,19 +2093,19 @@ function App() {
                       <div style={{ 
                         border: '1px solid #e0e0e0', 
                         borderRadius: '6px', 
-                        padding: '12px',
+                        padding: '8px',
                         backgroundColor: '#fafafa'
                       }}>
                         <div style={{ 
-                          fontSize: '13px', 
+                          fontSize: '12px', 
                           fontWeight: '600', 
-                          marginBottom: '8px',
+                          marginBottom: '6px',
                           color: '#333'
                         }}>
                           Footprint
                         </div>
                         
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                           <select
                             value={metricsFilters.footprint.operator}
                             onChange={(e) => {
@@ -1751,12 +2115,12 @@ function App() {
                               }));
                             }}
                             style={{
-                              padding: '4px 6px',
+                              padding: '3px 4px',
                               border: '1px solid #ddd',
                               borderRadius: '3px',
-                              fontSize: '12px',
-                              width: metricsFilters.footprint.operator === 'between' ? '80px' : 
-                                    metricsFilters.footprint.operator === 'greater_than' ? '110px' : '90px'
+                              fontSize: '11px',
+                              width: metricsFilters.footprint.operator === 'between' ? '70px' : 
+                                    metricsFilters.footprint.operator === 'greater_than' ? '95px' : '80px'
                             }}
                           >
                             <option value="greater_than">Greater than</option>
@@ -1767,20 +2131,24 @@ function App() {
                           
                           <input
                             type="number"
+                            min="0"
                             placeholder="Value"
                             value={metricsFilters.footprint.value1}
                             onChange={(e) => {
+                              const value = Math.max(0, parseFloat(e.target.value) || 0).toString()
                               setMetricsFilters(prev => ({
                                 ...prev,
-                                footprint: { ...prev.footprint, value1: e.target.value }
+                                footprint: { ...prev.footprint, value1: value }
                               }));
                             }}
                             style={{
-                              padding: '4px 6px',
-                              border: '1px solid #ddd',
+                              padding: '3px 4px',
+                              border: !isBetweenValid(metricsFilters.footprint) 
+                                ? '1px solid #ff6b6b' 
+                                : '1px solid #ddd',
                               borderRadius: '3px',
-                              fontSize: '12px',
-                              width: '60px'
+                              fontSize: '11px',
+                              width: '50px'
                             }}
                           />
                           
@@ -1789,20 +2157,24 @@ function App() {
                               <span style={{ fontSize: '11px', color: '#666' }}>and</span>
                               <input
                                 type="number"
+                                min="0"
                                 placeholder="Value"
                                 value={metricsFilters.footprint.value2}
                                 onChange={(e) => {
+                                  const value = Math.max(0, parseFloat(e.target.value) || 0).toString()
                                   setMetricsFilters(prev => ({
                                     ...prev,
-                                    footprint: { ...prev.footprint, value2: e.target.value }
+                                    footprint: { ...prev.footprint, value2: value }
                                   }));
                                 }}
                                 style={{
-                                  padding: '4px 6px',
-                                  border: '1px solid #ddd',
+                                  padding: '3px 4px',
+                                  border: !isBetweenValid(metricsFilters.footprint) 
+                                    ? '1px solid #ff6b6b' 
+                                    : '1px solid #ddd',
                                   borderRadius: '3px',
-                                  fontSize: '12px',
-                                  width: '60px'
+                                  fontSize: '11px',
+                                  width: '50px'
                                 }}
                               />
                             </>
@@ -1811,45 +2183,120 @@ function App() {
                       </div>
 
                       {/* Action Buttons */}
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                         <button
                           onClick={resetMetricsFilters}
+                          disabled={!hasAppliedFilters()}
                           style={{
-                            padding: '4px 8px',
+                            padding: '4px 10px',
                             border: '1px solid #ddd',
                             borderRadius: '3px',
-                            backgroundColor: '#f8f9fa',
-                            color: '#666',
-                            cursor: 'pointer',
+                            backgroundColor: hasAppliedFilters() ? '#f8f9fa' : '#f0f0f0',
+                            color: hasAppliedFilters() ? '#666' : '#999',
+                            cursor: hasAppliedFilters() ? 'pointer' : 'not-allowed',
                             fontSize: '11px',
-                            flex: '1'
+                            width: '70px',
+                            opacity: hasAppliedFilters() ? 1 : 0.6
                           }}
                         >
                           Reset
                         </button>
                         <button
                           onClick={applyMetricsFilters}
+                          disabled={!hasChanges()}
                           style={{
-                            padding: '4px 8px',
+                            padding: '4px 10px',
                             border: 'none',
                             borderRadius: '3px',
-                            backgroundColor: '#007bff',
+                            backgroundColor: hasChanges() ? '#007bff' : '#ccc',
                             color: 'white',
-                            cursor: 'pointer',
+                            cursor: hasChanges() ? 'pointer' : 'not-allowed',
                             fontSize: '11px',
                             fontWeight: '500',
-                            flex: '1'
+                            width: '70px',
+                            opacity: hasChanges() ? 1 : 0.6
                           }}
                         >
                           Apply
                         </button>
                       </div>
                     </div>
+
+                    {/* Active Filters Badges - Outside the grid container */}
+                    {appliedMetricsFilters && (
+                      <div style={{ 
+                        marginTop: '12px',
+                        display: 'flex',
+                        flexWrap: 'nowrap',
+                        gap: '6px',
+                        alignItems: 'center',
+                        justifyContent: 'flex-start',
+                        overflowX: 'auto',
+                        paddingLeft: '0px',
+                        width: '100%',
+                        minWidth: '0',
+                        maxWidth: 'none',
+                        position: 'relative',
+                        zIndex: 10
+                      }}>
+                        {Object.entries(appliedMetricsFilters)
+                          .filter(([_, filter]) => filter.value1 || filter.value2)
+                          .map(([metric, filter]) => (
+                            <div key={metric} style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              backgroundColor: '#4caf50',
+                              color: 'white',
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: '500',
+                              position: 'relative',
+                              zIndex: 15
+                            }}>
+                              <span style={{ textTransform: 'capitalize' }}>{metric}</span>
+                              <span>{filter.operator === 'greater_than' ? '>' : 
+                                    filter.operator === 'less_than' ? '<' : 
+                                    filter.operator === 'equal' ? '=' : 'between'}</span>
+                              <span>{filter.value1}{filter.value2 ? `-${filter.value2}` : ''}</span>
+                              <button
+                                onClick={() => {
+                                  const newFilters = { ...appliedMetricsFilters };
+                                  newFilters[metric] = { operator: 'greater_than', value1: '', value2: '' };
+                                  setAppliedMetricsFilters(newFilters);
+                                  setMetricsFilters(prev => ({
+                                    ...prev,
+                                    [metric]: { operator: 'greater_than', value1: '', value2: '' }
+                                  }));
+                                }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: 'white',
+                                  cursor: 'pointer',
+                                  fontSize: '10px',
+                                  padding: '0',
+                                  marginLeft: '2px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  width: '12px',
+                                  height: '12px',
+                                  borderRadius: '50%',
+                                  backgroundColor: 'rgba(255,255,255,0.2)'
+                                }}
+                                title="Remove filter"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-              
-
             </div>
           </div>
         )}
@@ -1862,7 +2309,7 @@ function App() {
             🏗️ Building Data
           </h2>
           <p className="info-panel-description">
-            Draw a polygon on the map to fetch building data. Click on buildings to see detailed information.
+            Draw one or more polygons on the map to fetch building data. Click on buildings to see detailed information.
           </p>
         </div>
 
@@ -1944,7 +2391,7 @@ function App() {
         </div>
 
         {/* Loading indicator when processing */}
-        {processingTask && !buildingsData && (
+        {processingTask && (
           <div style={{
             backgroundColor: 'white',
             padding: '20px',
@@ -1969,13 +2416,26 @@ function App() {
               color: '#2c3e50',
               marginBottom: '5px'
             }}>
-              Processing buildings...
+              {Object.keys(polygonData).length > 1 ? 'Processing new area...' : 'Processing buildings...'}
             </div>
             <div style={{ 
               fontSize: '14px', 
               color: '#6c757d'
             }}>
               {progress?.current_step || 'Initializing...'}
+              {Object.keys(polygonData).length > 1 && (
+                <span style={{ 
+                  marginLeft: '8px',
+                  backgroundColor: '#e3f2fd',
+                  color: '#1976d2',
+                  padding: '2px 6px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: '500'
+                }}>
+                  {Object.keys(polygonData).length} areas
+                </span>
+              )}
             </div>
             <div style={{ 
               marginTop: '15px',
