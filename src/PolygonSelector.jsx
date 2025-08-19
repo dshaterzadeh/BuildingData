@@ -243,6 +243,7 @@ function MapLayerToggle({ currentLayer, onLayerChange }) {
 // Component to fit bounds when buildings data changes
 function FitBounds({ buildingsData, focusOnNewPolygon = false }) {
   const map = useMap();
+  const prevBuildingsCountRef = useRef(0);
   
   useEffect(() => {
     // Don't fit bounds if we're focusing on a new polygon
@@ -250,7 +251,12 @@ function FitBounds({ buildingsData, focusOnNewPolygon = false }) {
       return;
     }
     
-    if (buildingsData && buildingsData.features && buildingsData.features.length > 0) {
+    // Only fit bounds if the number of buildings has actually changed
+    // This prevents fitting bounds when just clicking on buildings
+    const currentBuildingsCount = buildingsData?.features?.length || 0;
+    if (currentBuildingsCount !== prevBuildingsCountRef.current && currentBuildingsCount > 0) {
+      prevBuildingsCountRef.current = currentBuildingsCount;
+      
       try {
         const group = L.featureGroup();
         
