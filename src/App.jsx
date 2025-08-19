@@ -248,7 +248,7 @@ function App() {
           setProgress(progressData)
           
           if (progressData.status === 'completed' && progressData.data) {
-            console.log('Received completed data for task:', processingTask, progressData.data)
+    
             try {
               // Validate data structure
               if (progressData.data && typeof progressData.data === 'object') {
@@ -282,17 +282,13 @@ function App() {
                     .filter(polygon => polygon.status === 'completed' && polygon.data)
                     .map(polygon => polygon.data);
                   
-                  console.log(`Found ${allCompletedData.length} completed polygons:`, 
-                    Object.keys(updatedPolygonData).filter(id => 
-                      updatedPolygonData[id].status === 'completed' && updatedPolygonData[id].data
-                    )
-                  );
+
                   
                   if (allCompletedData.length > 0) {
                     // Merge all building data
                     const mergedData = mergeBuildingData(allCompletedData);
                     setBuildingsData(mergedData);
-                    console.log(`Merged data from ${allCompletedData.length} polygons`);
+
                   }
                 }
                 
@@ -347,11 +343,9 @@ function App() {
         features: allFeatures
       };
       
-      console.log(`Merged ${allFeatures.length} buildings from ${dataArray.length} polygons`);
       return mergedData;
       
     } catch (error) {
-      console.error('Error merging building data:', error);
       // Fallback to first dataset
       return dataArray[0];
     }
@@ -379,7 +373,7 @@ function App() {
     if (!polygonsArray) {
       // If polygonId is provided, remove only that specific polygon
       if (polygonId) {
-        console.log(`Removing polygon ${polygonId} from data`);
+
         setPolygonData(prev => {
           const newData = { ...prev };
           delete newData[polygonId];
@@ -448,8 +442,7 @@ function App() {
         return [coord.lng, coord.lat];
       });
       
-      console.log(`Processing polygon ${currentPolygonId} with ${coordinates.length} coordinates`);
-      console.log('Sending coordinates to backend:', coordinates);
+
       
               const response = await fetch('/api/process-polygon', {
         method: 'POST',
@@ -468,7 +461,6 @@ function App() {
           
           // If this polygon already exists, clear its old data
           if (updatedData[currentPolygonId]) {
-            console.log(`Updating existing polygon ${currentPolygonId}`);
             // Remove old data but keep the entry for tracking
             updatedData[currentPolygonId] = {
               taskId: result.task_id,
@@ -476,7 +468,6 @@ function App() {
               status: 'processing'
             };
           } else {
-            console.log(`Creating new polygon ${currentPolygonId}`);
             updatedData[currentPolygonId] = {
               taskId: result.task_id,
               coords: currentPolygon,
@@ -807,9 +798,7 @@ function App() {
     
     let filteredFeatures = buildingsData.features;
     
-    console.log('getFilteredBuildings called');
-    console.log('Selected categories:', selectedCategories);
-    console.log('Applied metrics filters:', appliedMetricsFilters);
+
     
     // Apply category filters
     if (selectedCategories.length > 0) {
@@ -818,7 +807,7 @@ function App() {
         const category = categorizeBuilding(buildingType);
         return selectedCategories.includes(category);
       });
-      console.log('After category filtering:', filteredFeatures.length, 'buildings');
+
     }
     
     // Apply metrics filters
@@ -827,7 +816,7 @@ function App() {
       filteredFeatures = filteredFeatures.filter(building => 
         buildingMatchesMetricsFilters(building)
       );
-      console.log('After metrics filtering:', filteredFeatures.length, 'buildings (was', beforeMetrics, ')');
+
     }
     
     return { ...buildingsData, features: filteredFeatures };
@@ -1554,9 +1543,7 @@ function App() {
             pointerEvents: 'auto'
           }}
           onClick={() => {
-            console.log('Badge clicked, current state:', filterDrawerOpen);
             setFilterDrawerOpen(true);
-            console.log('Setting filterDrawerOpen to true');
           }}
           onMouseEnter={(e) => {
             e.target.style.backgroundColor = '#f8f9fa';
@@ -1592,11 +1579,9 @@ function App() {
               🏷️ Filter by
               </div>
               <button
-                onClick={() => {
-                  console.log('Close button clicked, current state:', filterDrawerOpen);
-                  setFilterDrawerOpen(false);
-                  console.log('Setting filterDrawerOpen to false');
-                }}
+                            onClick={() => {
+              setFilterDrawerOpen(false);
+            }}
                 style={{
                   background: 'none',
                   border: 'none',

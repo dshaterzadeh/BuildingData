@@ -543,80 +543,17 @@ class OSMProcessor:
             return None
 
 class OvertureProcessor:
-    """Handles Overture Maps data for building heights and floors"""
+    """Handles Overture Maps data for building height/floor information"""
     
     @staticmethod
     async def fetch_building_data(bounds: Dict[str, float]) -> List[Dict[str, Any]]:
         """Fetch building height/floor data from Overture Maps"""
-        try:
-            # In production, this would:
-            # 1. Query Overture's S3/Azure hosted GeoParquet files
-            # 2. Filter by bounding box
-            # 3. Extract height and floor information
-            
-            # For now, return empty list (no mock data)
-            logger.info("Overture data not available - returning empty list")
-            return []
-            
-        except Exception as e:
-            logger.error(f"Error fetching Overture data: {e}")
-            return []
+        return []
     
     @staticmethod
     def enrich_buildings_with_overture(buildings: List[Dict], overture_data: List[Dict]) -> List[Dict]:
         """Enrich OSM buildings with Overture height/floor data"""
-        enriched_buildings = []
-        
-        for building in buildings:
-            enriched_building = building.copy()
-            properties = enriched_building['properties']
-            
-            # Try to find matching Overture data
-            matching_overture = OvertureProcessor._find_matching_overture_data(
-                building, overture_data
-            )
-            
-            if matching_overture:
-                # ONLY fill missing height - NEVER override existing OSM height
-                if not properties.get('height') or properties.get('height') == 0 or properties.get('height') is None:
-                    properties['height'] = matching_overture.get('height')
-                    if 'overture' not in properties.get('data_sources', []):
-                        properties['data_sources'] = properties.get('data_sources', []) + ['overture']
-                
-                # ONLY fill missing floors - NEVER override existing OSM floors
-                if not properties.get('building:levels') or properties.get('building:levels') == 0 or properties.get('building:levels') is None:
-                    properties['building:levels'] = matching_overture.get('num_floors')
-                    if 'overture' not in properties.get('data_sources', []):
-                        properties['data_sources'] = properties.get('data_sources', []) + ['overture']
-            
-            enriched_buildings.append(enriched_building)
-        
-        return enriched_buildings
-    
-    @staticmethod
-    def _find_matching_overture_data(building: Dict, overture_data: List[Dict]) -> Optional[Dict]:
-        """Find matching Overture data for a building using spatial proximity"""
-        try:
-            building_geom = shape(building['geometry'])
-            building_center = building_geom.centroid
-            
-            best_match = None
-            best_distance = float('inf')
-            
-            for overture_item in overture_data:
-                overture_point = Point(overture_item['geometry']['coordinates'])
-                distance = building_center.distance(overture_point)
-                
-                # Use 50 meters as maximum matching distance
-                if distance < 50 and distance < best_distance:
-                    best_match = overture_item
-                    best_distance = distance
-            
-            return best_match
-            
-        except Exception as e:
-            logger.error(f"Error matching Overture data: {e}")
-            return None
+        return buildings
 
 class ISTATProcessor:
     """Handles ISTAT census data for unit estimation"""
@@ -624,111 +561,12 @@ class ISTATProcessor:
     @staticmethod
     async def fetch_census_data(bounds: Dict[str, float]) -> List[Dict[str, Any]]:
         """Fetch ISTAT census section data"""
-        try:
-            # In production, this would fetch from ISTAT's API or database
-            # For now, return empty list (no mock data)
-            logger.info("ISTAT data not available - returning empty list")
-            return []
-            
-        except Exception as e:
-            logger.error(f"Error fetching ISTAT data: {e}")
-            return []
+        return []
     
     @staticmethod
     def estimate_units_from_istat(buildings: List[Dict], istat_data: List[Dict]) -> List[Dict]:
         """Estimate building units using ISTAT census data"""
-        enriched_buildings = []
-        
-        try:
-            # Create GeoDataFrames for spatial operations
-            buildings_data = []
-            for b in buildings:
-                try:
-                    geom = shape(b['geometry'])
-                    building_id = b.get('id') or b.get('properties', {}).get('osm_id', 'unknown')
-                    buildings_data.append({
-                        'id': building_id,
-                        'geometry': geom,
-                        'building': b
-                    })
-                except Exception as e:
-                    logger.warning(f"Invalid geometry for building {building_id}: {e}")
-                    continue
-            
-            if not buildings_data:
-                return buildings
-            
-            buildings_gdf = gpd.GeoDataFrame(buildings_data, crs="EPSG:4326")
-            
-            istat_data_processed = []
-            for item in istat_data:
-                try:
-                    geom = shape(item['geometry'])
-                    istat_data_processed.append({
-                        'census_section': item['census_section'],
-                        'total_dwellings': item['total_dwellings'],
-                        'total_buildings': item['total_buildings'],
-                        'avg_units_per_building': item['avg_units_per_building'],
-                        'geometry': geom
-                    })
-                except Exception as e:
-                    logger.warning(f"Invalid ISTAT geometry: {e}")
-                    continue
-            
-            if not istat_data_processed:
-                return buildings
-            
-            istat_gdf = gpd.GeoDataFrame(istat_data_processed, crs="EPSG:4326")
-            
-            # Perform spatial join
-            joined = gpd.sjoin(buildings_gdf, istat_gdf, how='left', predicate='within')
-            
-            for _, row in joined.iterrows():
-                building = row['building'].copy()
-                properties = building['properties']
-                
-                if pd.notna(row['total_dwellings']):
-                    # Calculate estimated units based on building area and floors using geodesic area
-                    building_area = calculate_geodesic_area(row['geometry'])
-                    floors = properties.get('building:levels', 1)
-                    
-                    # Estimate units using area and floor-based weighting
-                    estimated_units = ISTATProcessor._calculate_estimated_units(
-                        building_area, floors, row['avg_units_per_building']
-                    )
-                    
-                    properties['estimated_units'] = int(estimated_units)
-                    properties['data_sources'] = properties.get('data_sources', []) + ['istat']
-                    properties['census_section'] = row['census_section']
-                
-                enriched_buildings.append(building)
-            
-        except Exception as e:
-            logger.error(f"Error estimating units from ISTAT: {e}")
-            # Fallback: return original buildings
-            return buildings
-        
-        return enriched_buildings
-    
-    @staticmethod
-    def _calculate_estimated_units(building_area: float, floors: int, avg_units: float) -> float:
-        """Calculate estimated units based on building characteristics"""
-        # Simple estimation: use area and floors to estimate units
-        # In a more sophisticated approach, you'd use machine learning models
-        
-        # Base estimation: assume 80 sqm per unit on average
-        base_area_per_unit = 80
-        
-        # Calculate total building area
-        total_area = building_area * floors
-        
-        # Estimate units
-        estimated_units = total_area / base_area_per_unit
-        
-        # Apply some randomness and constraints
-        estimated_units = max(1, min(estimated_units, avg_units * 2))
-        
-        return round(estimated_units, 1)
+        return buildings
 
 class APEProcessor:
     """Handles APE (Attestato di Prestazione Energetica) data"""
@@ -736,62 +574,12 @@ class APEProcessor:
     @staticmethod
     async def fetch_energy_data(bounds: Dict[str, float]) -> List[Dict[str, Any]]:
         """Fetch APE energy classification data"""
-        try:
-            # In production, this would fetch from APE database
-            # For now, return empty list (no mock data)
-            logger.info("APE data not available - returning empty list")
-            return []
-            
-        except Exception as e:
-            logger.error(f"Error fetching APE data: {e}")
-            return []
+        return []
     
     @staticmethod
     def enrich_buildings_with_ape(buildings: List[Dict], ape_data: List[Dict]) -> List[Dict]:
         """Enrich buildings with APE energy classification data"""
-        enriched_buildings = []
-        
-        for building in buildings:
-            enriched_building = building.copy()
-            properties = enriched_building['properties']
-            
-            # Find matching APE data
-            matching_ape = APEProcessor._find_matching_ape_data(building, ape_data)
-            
-            if matching_ape:
-                properties['energy_class'] = matching_ape.get('energy_class')
-                properties['energy_consumption'] = matching_ape.get('energy_consumption')
-                properties['ape_certification_date'] = matching_ape.get('certification_date')
-                properties['data_sources'] = properties.get('data_sources', []) + ['ape']
-            
-            enriched_buildings.append(enriched_building)
-        
-        return enriched_buildings
-    
-    @staticmethod
-    def _find_matching_ape_data(building: Dict, ape_data: List[Dict]) -> Optional[Dict]:
-        """Find matching APE data for a building"""
-        try:
-            building_geom = shape(building['geometry'])
-            building_center = building_geom.centroid
-            
-            best_match = None
-            best_distance = float('inf')
-            
-            for ape_item in ape_data:
-                ape_point = Point(ape_item['geometry']['coordinates'])
-                distance = building_center.distance(ape_point)
-                
-                # Use 100 meters as maximum matching distance for APE data
-                if distance < 100 and distance < best_distance:
-                    best_match = ape_item
-                    best_distance = distance
-            
-            return best_match
-            
-        except Exception as e:
-            logger.error(f"Error matching APE data: {e}")
-            return None
+        return buildings
 
 class DataMerger:
     """Handles merging and final processing of all data sources"""

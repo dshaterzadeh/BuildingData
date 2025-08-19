@@ -28,7 +28,7 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# In-memory storage for progress tracking (use Redis in production)
+# In-memory storage for progress tracking
 progress_store = {}
 
 class PolygonRequest(BaseModel):

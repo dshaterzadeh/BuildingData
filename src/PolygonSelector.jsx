@@ -320,19 +320,7 @@ function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selec
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [highlightedPolygon, setHighlightedPolygon] = useState(null);
   
-  // Debug logging
-  useEffect(() => {
-    if (buildingsData) {
-      console.log('Buildings data received:', buildingsData);
-      console.log('Number of features:', buildingsData.features?.length || 0);
-      if (buildingsData.features && buildingsData.features.length > 0) {
-        console.log('First building:', buildingsData.features[0]);
-        console.log('Building types found:', [...new Set(buildingsData.features.map(f => f.properties?.building || 'unknown'))]);
-      }
-    } else {
-      console.log('No buildings data available');
-    }
-  }, [buildingsData]);
+
 
 
 
@@ -375,8 +363,7 @@ function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selec
     setPolygons(prev => {
       const updatedPolygons = [...prev, newPolygon];
       
-      console.log("New polygon added:", coords);
-      console.log("Total polygons:", updatedPolygons.length);
+
       
       // Set focus on the new polygon
       setFocusOnNewPolygon(true);
@@ -391,7 +378,7 @@ function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selec
 
   // Function to send polygon to parent
   const sendPolygonToParent = (polygon) => {
-    console.log("Sending polygon to parent:", polygon.coords, "with ID:", polygon.id);
+    
     onPolygonDrawn([polygon.coords], polygon.id);
   };
 
@@ -410,7 +397,7 @@ function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selec
     
     // Multiple polygons - process the newest one
     try {
-      console.log("Multiple polygons detected:", polygonList.length);
+
       
       // Process the newest polygon (last in the array)
       const newestPolygon = polygonList[polygonList.length - 1];
@@ -449,8 +436,7 @@ function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selec
     
     if (editedPolygon) {
       setPolygons(updatedPolygons);
-      console.log("Processing edited polygon:", editedPolygon.id);
-      console.log("Total polygons after edit:", updatedPolygons.length);
+
       
       // Set focus on the edited polygon
       setFocusOnNewPolygon(true);
@@ -461,7 +447,7 @@ function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selec
   };
 
   const handleDeleted = (e) => {
-    console.log("Delete event triggered");
+    
     
     // Clear the drawn items
     setDrawnItems(new L.FeatureGroup());
@@ -507,7 +493,7 @@ function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selec
 
   // Function to remove a specific polygon
   const removePolygon = (polygonToRemove) => {
-    console.log("Removing polygon:", polygonToRemove.id);
+    
     
     // Remove the layer from the map
     if (polygonToRemove.layer) {
@@ -528,7 +514,7 @@ function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selec
     // Remove from polygons state
     setPolygons(prev => {
       const updatedPolygons = prev.filter(p => p.id !== polygonToRemove.id);
-      console.log("Polygons after removal:", updatedPolygons.length);
+
       return updatedPolygons;
     });
     
@@ -562,8 +548,7 @@ function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selec
   const onEachFeature = (feature, layer) => {
     layer.on({
       click: () => {
-        console.log('Building clicked:', feature);
-        console.log('Building properties:', feature.properties);
+        
         onBuildingClick(feature);
       },
       mouseover: (e) => {
