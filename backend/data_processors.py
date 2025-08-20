@@ -5,8 +5,9 @@ import logging
 import math
 import urllib.parse
 from typing import List, Dict, Any, Optional, Tuple
-from shapely.geometry import Polygon, Point, shape
-from shapely.ops import unary_union
+from shapely.geometry import Polygon, Point, shape, LineString, MultiPolygon
+from shapely.ops import unary_union, polygonize
+from shapely.geometry.polygon import orient
 import geopandas as gpd
 import pandas as pd
 import numpy as np
@@ -16,40 +17,42 @@ from pyproj import Geod
 
 logger = logging.getLogger(__name__)
 
-def calculate_geodesic_area(building_geom: Polygon) -> float:
+def calculate_geodesic_area(building_geom) -> float:
     """
-    Calculate the geodesic area of a building polygon in square meters.
+    Calculate the geodesic area of a building geometry in square meters.
     
     This function uses the WGS84 ellipsoid and geodesic calculations for 
     production-grade accuracy, accounting for the Earth's curvature.
     
     Args:
-        building_geom: Shapely Polygon geometry in WGS84 coordinates (lat/lon)
+        building_geom: Shapely geometry (Polygon or MultiPolygon) in WGS84 coordinates (lat/lon)
     
     Returns:
         float: Area in square meters
     """
-    try:
-        # Initialize geodesic calculator using WGS84 ellipsoid
-        geod = Geod(ellps='WGS84')
-        
-        # Extract coordinates from the polygon
-        coords = list(building_geom.exterior.coords)
-        
-        # Convert to separate lat/lon arrays for pyproj
-        lons = [coord[0] for coord in coords]
-        lats = [coord[1] for coord in coords]
-        
-        # Calculate geodesic area
-        area_m2, _ = geod.polygon_area_perimeter(lons, lats)
-        
-        # pyproj returns negative area for clockwise coordinates, so take absolute value
-        return abs(area_m2)
-        
-    except Exception as e:
-        logger.error(f"Error calculating geodesic area: {e}")
-        # Fallback to approximate calculation if geodesic fails
-        return _fallback_area_calculation(building_geom)
+    geod = Geod(ellps='WGS84')
+
+    def _one(poly: Polygon) -> float:
+        # exterior
+        ex = list(poly.exterior.coords)
+        lons = [p[0] for p in ex]
+        lats = [p[1] for p in ex]
+        a_ext, _ = geod.polygon_area_perimeter(lons, lats)
+        area = abs(a_ext)
+        # subtract holes
+        for ring in poly.interiors:
+            ir = list(ring.coords)
+            ilons = [p[0] for p in ir]
+            ilats = [p[1] for p in ir]
+            a_int, _ = geod.polygon_area_perimeter(ilons, ilats)
+            area -= abs(a_int)
+        return max(area, 0.0)
+
+    if building_geom.geom_type == 'Polygon':
+        return _one(building_geom)
+    elif building_geom.geom_type == 'MultiPolygon':
+        return sum(_one(p) for p in building_geom.geoms)
+    return 0.0
 
 def _fallback_area_calculation(building_geom: Polygon) -> float:
     """
@@ -253,6 +256,7 @@ class OSMProcessor:
             (
               way["building"]({bounds['south']},{bounds['west']},{bounds['north']},{bounds['east']});
               relation["building"]({bounds['south']},{bounds['west']},{bounds['north']},{bounds['east']});
+              relation["type"="multipolygon"]["building"]({bounds['south']},{bounds['west']},{bounds['north']},{bounds['east']});
             );
             out body;
             >;
@@ -313,67 +317,189 @@ class OSMProcessor:
     
     def process_data(self, data):
         """Process OSM data and convert to GeoJSON with enhanced properties."""
-        try:
-            # Try using osmtogeojson library first
-            geojson_data = osmtogeojson.process_osm_json(data)
-            
-            buildings = []
-            for feature in geojson_data.get('features', []):
-                if feature.get('properties', {}).get('building'):
-                    # Create Shapely geometry for area calculation
-                    coords = feature['geometry']['coordinates'][0]
-                    building_geom = Polygon(coords)
-                    
-                    # Create enhanced building feature with roof area
-                    building_feature = self._create_building_feature(feature, building_geom)
-                    buildings.append(building_feature)
-            
-            return buildings
-            
-        except Exception as e:
-            logging.warning(f"osmtogeojson failed, using manual processing: {e}")
-            return self._manual_process_data(data)
+        # Always use manual processing to ensure proper multipolygon handling
+        return self._manual_process_data(data)
     
     def _manual_process_data(self, data):
         """Manual processing fallback when osmtogeojson fails."""
         buildings = []
         
         try:
+            # Debug: Log what elements we received
+            element_types = {}
+            for element in data.get('elements', []):
+                element_type = element.get('type', 'unknown')
+                element_types[element_type] = element_types.get(element_type, 0) + 1
+            
+            logger.info(f"Received OSM elements: {element_types}")
+            
             # Create a mapping of node IDs to coordinates
             nodes = {}
             for element in data.get('elements', []):
                 if element.get('type') == 'node':
                     nodes[element['id']] = [element['lon'], element['lat']]
             
-            # Process ways (buildings)
+            # Create a mapping of way IDs to raw coordinates (do NOT force-close)
+            ways = {}
             for element in data.get('elements', []):
-                if element.get('type') == 'way' and element.get('tags', {}).get('building'):
-                    # Build coordinates from nodes
+                if element.get('type') == 'way':
                     coords = []
                     for node_id in element.get('nodes', []):
                         if node_id in nodes:
-                            coords.append(nodes[node_id])
-                    
-                    # Ensure we have enough coordinates and the polygon is closed
-                    if len(coords) >= 3:
-                        # Close the polygon if needed
-                        if coords[0] != coords[-1]:
-                            coords.append(coords[0])
+                            coords.append(tuple(nodes[node_id]))  # (lon, lat)
+                    if len(coords) >= 2:
+                        ways[element['id']] = coords
+            
+            # Process multipolygon relations first
+            processed_relations = set()
+            relation_count = 0
+            for element in data.get('elements', []):
+                if element.get('type') == 'relation':
+                    logger.info(f"Found relation {element['id']} with tags: {element.get('tags', {})}")
+                    if (element.get('tags', {}).get('building') and
+                        (element.get('tags', {}).get('type') == 'multipolygon' or 
+                         len(element.get('members', [])) > 1)):  # Treat relations with multiple members as multipolygons
                         
-                        try:
-                            building_geom = Polygon(coords)
-                            if building_geom.is_valid:
-                                building_feature = self._create_building_feature(element, building_geom)
-                                buildings.append(building_feature)
-                        except Exception as e:
-                            logging.warning(f"Error creating building geometry: {e}")
-                            continue
+                        relation_count += 1
+                        logger.info(f"Processing multipolygon relation {element['id']} with {len(element.get('members', []))} members")
+                        relation_buildings = self._process_multipolygon_relation(element, ways, nodes)
+                        buildings.extend(relation_buildings)
+                        processed_relations.add(element['id'])
+                        logger.info(f"Created {len(relation_buildings)} buildings from relation {element['id']}")
+                    elif element.get('tags', {}).get('building'):
+                        logger.info(f"Found building relation {element['id']} but not multipolygon type")
+            
+            if relation_count > 0:
+                logger.info(f"Processed {relation_count} multipolygon relations")
+            
+            # Process individual ways (buildings that are not part of multipolygon relations)
+            for element in data.get('elements', []):
+                if element.get('type') == 'way' and element.get('tags', {}).get('building'):
+                    # Skip ways that are part of processed relations
+                    if not self._is_way_in_processed_relations(element['id'], data.get('elements', []), processed_relations):
+                        coords = ways.get(element['id'], [])
+                        if len(coords) >= 4 and coords[0] == coords[-1]:  # closed ring only
+                            try:
+                                building_geom = Polygon(coords).buffer(0)
+                                if building_geom.is_valid and not building_geom.is_empty:
+                                    building_feature = self._create_building_feature(element, building_geom)
+                                    buildings.append(building_feature)
+                            except Exception as e:
+                                logging.warning(f"Error creating building geometry for way %s: %s", element['id'], e)
+                                continue
             
             return buildings
             
         except Exception as e:
             logging.error(f"Error in manual data processing: {e}")
             return []
+    
+    def _process_multipolygon_relation(self, relation, ways, nodes):
+        """
+        Build proper polygons (with holes) from a multipolygon relation whose
+        'outer'/'inner' rings may be split across many ways.
+        """
+        try:
+            # Split members by role
+            outer_ids, inner_ids = [], []
+            for m in relation.get('members', []):
+                if m.get('type') != 'way':
+                    continue
+                role = (m.get('role') or '').strip().lower()
+                (inner_ids if role == 'inner' else outer_ids).append(m['ref'])
+
+            def _polygonize_from_way_ids(ids):
+                lines = []
+                for wid in ids:
+                    coords = ways.get(wid)
+                    if not coords or len(coords) < 2:
+                        continue
+                    try:
+                        lines.append(LineString(coords))
+                    except Exception:
+                        pass
+                if not lines:
+                    return []
+                merged = unary_union(lines)
+                polys = list(polygonize(merged))
+                clean = []
+                for p in polys:
+                    g = p.buffer(0)  # heal tiny defects
+                    if g.is_empty:
+                        continue
+                    if isinstance(g, MultiPolygon):
+                        clean.extend([pp for pp in g.geoms if pp.is_valid and not pp.is_empty])
+                    elif g.is_valid:
+                        clean.append(g)
+                # Standardize orientation (outer CCW in lon/lat is not guaranteed, but consistent orientation helps)
+                return [orient(pp, sign=1.0) for pp in clean]
+
+            # Build outer and inner polygons from segments
+            outer_polys = _polygonize_from_way_ids(outer_ids)
+            inner_polys = _polygonize_from_way_ids(inner_ids)
+
+            # Fallback: if polygonize couldn't build outers, accept any member way that is a closed ring
+            if not outer_polys:
+                for wid in outer_ids:
+                    coords = ways.get(wid)
+                    if coords and len(coords) >= 4 and coords[0] == coords[-1]:
+                        try:
+                            p = Polygon(coords).buffer(0)
+                            if p.is_valid and not p.is_empty:
+                                outer_polys.append(orient(p, sign=1.0))
+                        except Exception:
+                            pass
+            if not outer_polys:
+                logger.warning("Relation %s has no buildable outer polygon.", relation.get('id'))
+                return []
+
+            # Assign inner rings (holes) to the outer that contains them
+            holes_for_outer = {i: [] for i in range(len(outer_polys))}
+            for ip in inner_polys:
+                pt = ip.representative_point()
+                # choose the first outer that covers the point
+                idx = next((i for i, op in enumerate(outer_polys) if op.contains(pt) or op.covers(pt)), None)
+                if idx is not None:
+                    holes_for_outer[idx].append(ip)
+
+            # Build final geometries with holes, prefer direct construction over difference()
+            final_geoms = []
+            for i, op in enumerate(outer_polys):
+                holes = [list(h.exterior.coords) for h in holes_for_outer[i]]
+                try:
+                    poly = Polygon(list(op.exterior.coords), holes).buffer(0)
+                except Exception:
+                    # last resort: keep outer alone
+                    poly = op
+                if poly.is_empty:
+                    continue
+                if isinstance(poly, MultiPolygon):
+                    for g in poly.geoms:
+                        if g.is_valid and not g.is_empty:
+                            final_geoms.append(orient(g, sign=1.0))
+                elif poly.is_valid:
+                    final_geoms.append(orient(poly, sign=1.0))
+
+            # Convert to features
+            out = []
+            for g in final_geoms:
+                out.append(self._create_building_feature(relation, g))
+            return out
+
+        except Exception as e:
+            logging.error("Error processing multipolygon relation %s: %s", relation.get('id'), e)
+            return []
+    
+    def _is_way_in_processed_relations(self, way_id, elements, processed_relations):
+        """Check if a way is part of any processed multipolygon relation."""
+        for element in elements:
+            if (element.get('type') == 'relation' and 
+                element.get('id') in processed_relations):
+                for member in element.get('members', []):
+                    if (member.get('type') == 'way' and 
+                        member.get('ref') == way_id):
+                        return True
+        return False
     
     def _create_building_feature(self, element, building_geom):
         """Create a GeoJSON feature for a building with enhanced properties."""
@@ -393,6 +519,14 @@ class OSMProcessor:
         if osm_id and '/' not in str(osm_id):
             # If it's just a numeric ID, assume it's a way (most buildings are ways)
             osm_id = f"way/{osm_id}"
+        
+        # Check if this is part of a multipolygon relation
+        is_multipolygon = element.get('type') == 'relation' and tags.get('type') == 'multipolygon'
+        relation_id = element.get('id') if is_multipolygon else None
+        
+        # For relations, ensure we have the correct OSM ID format
+        if element.get('type') == 'relation':
+            osm_id = f"relation/{element.get('id')}"
         
         # Calculate geodesic area in square meters first (needed for inference)
         area_meters = calculate_geodesic_area(building_geom)
@@ -466,6 +600,8 @@ class OSMProcessor:
             'leisure': tags.get('leisure'),
             'tourism': tags.get('tourism'),
             'historic': tags.get('historic'),
+            'is_multipolygon': is_multipolygon,
+            'relation_id': relation_id,
             'data_sources': ['osm']
         }
         
@@ -474,12 +610,39 @@ class OSMProcessor:
         properties['roof_area_m2'] = round(area_meters * roof_factor, 2)
         properties['footprint_area_m2'] = round(area_meters, 2)
         
-        return {
-            'type': 'Feature',
-            'geometry': {
+        # Handle different geometry types
+        if building_geom.geom_type == 'Polygon':
+            # Handle polygon with holes
+            coords = [[[float(x), float(y)] for x, y in building_geom.exterior.coords]]
+            # Add interior rings (holes) if they exist
+            for interior in building_geom.interiors:
+                coords.append([[float(x), float(y)] for x, y in interior.coords])
+            
+            geometry = {
+                'type': 'Polygon',
+                'coordinates': coords
+            }
+        elif building_geom.geom_type == 'MultiPolygon':
+            geometry = {
+                'type': 'MultiPolygon',
+                'coordinates': []
+            }
+            for poly in building_geom.geoms:
+                poly_coords = [[[float(x), float(y)] for x, y in poly.exterior.coords]]
+                # Add interior rings (holes) if they exist
+                for interior in poly.interiors:
+                    poly_coords.append([[float(x), float(y)] for x, y in interior.coords])
+                geometry['coordinates'].append(poly_coords)
+        else:
+            # Fallback to Polygon for other geometry types
+            geometry = {
                 'type': 'Polygon',
                 'coordinates': [[[float(x), float(y)] for x, y in building_geom.exterior.coords]]
-            },
+            }
+        
+        return {
+            'type': 'Feature',
+            'geometry': geometry,
             'properties': properties
         }
     
