@@ -13,7 +13,9 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        // Local dev talks to the backend on localhost; set BACKEND_URL when
+        // the dev server runs inside docker (e.g. http://backend:8000)
+        target: process.env.BACKEND_URL || 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
       },
