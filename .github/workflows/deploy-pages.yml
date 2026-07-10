@@ -29,10 +29,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Custom domain (buildings.vitna.ir) serves from the root, so no
+      # /<repo>/ base path is needed
       - name: Build
         run: npm run build
-        env:
-          BASE_PATH: /${{ github.event.repository.name }}/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

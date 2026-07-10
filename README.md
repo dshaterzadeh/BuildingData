@@ -2,7 +2,7 @@
 
 A fully client-side web application for analyzing building data from OpenStreetMap. Draw polygons on a map to fetch building information — heights, floors, footprint and roof areas, population estimates — and explore the results in 2D or as an orbitable 3D city view.
 
-**Live app:** https://dshaterzadeh.github.io/BuildingData/
+**Live app:** https://buildings.vitna.ir/
 
 There is no server: the browser queries the Overpass API directly, assembles geometries (including multipolygon relations with courtyards), filters buildings to your polygon, and computes all derived metrics locally.
 
