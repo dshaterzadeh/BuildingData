@@ -4,10 +4,6 @@ node_modules/
 # Build output
 dist/
 
-# Python
-backend/venv/
-__pycache__/
-*.pyc
 
 # IDE / OS
 .idea/

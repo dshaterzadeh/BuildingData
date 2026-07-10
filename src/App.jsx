@@ -23,6 +23,7 @@ import {
   IconChevronDown,
   IconPolygon
 } from './Icons.jsx'
+import { fetchBuildingsInPolygon } from './osmService.js'
 import './App.css'
 
 const EMPTY_METRICS_FILTERS = {
@@ -139,62 +140,21 @@ function App() {
     return value.toString()
   }
 
-  // Poll progress for every polygon that is still processing (several can be
-  // in flight at once when the user draws multiple areas quickly)
+  // Recompute the merged building set whenever any polygon's data changes
+  // (fetches run client-side now — no backend, no polling)
   useEffect(() => {
-    const processingEntries = Object.entries(polygonData)
-      .filter(([, polygon]) => polygon.status === 'processing' && polygon.taskId)
-    if (processingEntries.length === 0) return
+    const allCompletedData = Object.values(polygonData)
+      .filter(polygon => polygon.status === 'completed' && polygon.data)
+      .map(polygon => polygon.data)
 
-    const pollProgress = async () => {
-      const updates = {}
-      let errorMessage = null
-
-      for (const [polygonId, polygon] of processingEntries) {
-        try {
-          const response = await fetch(`/api/progress/${polygon.taskId}`)
-          if (!response.ok) continue
-          const progressData = await response.json()
-          setProgress(progressData)
-
-          if (progressData.status === 'completed') {
-            if (progressData.data && typeof progressData.data === 'object') {
-              updates[polygonId] = { ...polygon, status: 'completed', data: progressData.data }
-            } else {
-              console.error('Invalid data structure received:', progressData.data)
-              errorMessage = 'Invalid data structure received from backend'
-              updates[polygonId] = { ...polygon, status: 'error' }
-            }
-          } else if (progressData.status === 'error') {
-            console.error('Backend error:', progressData.message)
-            errorMessage = progressData.message || 'Processing failed'
-            updates[polygonId] = { ...polygon, status: 'error' }
-          }
-        } catch (err) {
-          console.error('Error polling progress:', err)
-          errorMessage = 'Failed to get progress updates'
-          updates[polygonId] = { ...polygon, status: 'error' }
-        }
-      }
-
-      if (Object.keys(updates).length === 0) return
-
-      const updatedPolygonData = { ...polygonData, ...updates }
-      setPolygonData(updatedPolygonData)
-      if (errorMessage) setError(errorMessage)
-
-      const allCompletedData = Object.values(updatedPolygonData)
-        .filter(polygon => polygon.status === 'completed' && polygon.data)
-        .map(polygon => polygon.data)
-
-      if (allCompletedData.length > 0) {
-        setBuildingsData(mergeBuildingData(allCompletedData))
-        setEstimationSettingsOpen(false)
-      }
+    if (allCompletedData.length > 0) {
+      setBuildingsData(mergeBuildingData(allCompletedData))
+      setEstimationSettingsOpen(false)
+    } else {
+      setBuildingsData(null)
+      setSelectedBuilding(null)
+      setSelectedCategories([])
     }
-
-    const interval = setInterval(pollProgress, 1000)
-    return () => clearInterval(interval)
   }, [polygonData])
 
   // Auto-open filter drawer the first time building data arrives
@@ -211,29 +171,20 @@ function App() {
   }, [buildingsData])
 
   const handlePolygonDrawn = async (polygonsArray, polygonId = null) => {
-    // Clear all data when polygons are deleted (polygonsArray is null)
+    // Clear data when polygons are deleted (polygonsArray is null); the merge
+    // effect above recomputes buildingsData from the remaining polygons
     if (!polygonsArray) {
       if (polygonId) {
-        const newData = { ...polygonData }
-        delete newData[polygonId]
-        setPolygonData(newData)
-
-        const remainingPolygons = Object.values(newData).filter(p => p.status === 'completed' && p.data)
-        if (remainingPolygons.length > 0) {
-          setBuildingsData(mergeBuildingData(remainingPolygons.map(p => p.data)))
-        } else {
-          setBuildingsData(null)
-          setSelectedBuilding(null)
-          setSelectedCategories([])
-        }
+        setPolygonData(prev => {
+          const newData = { ...prev }
+          delete newData[polygonId]
+          return newData
+        })
         return
       }
 
       setPolygonData({})
       setError(null)
-      setBuildingsData(null)
-      setSelectedBuilding(null)
-      setSelectedCategories([])
       setProgress(null)
       setEstimationSettingsOpen(false)
       return
@@ -256,64 +207,50 @@ function App() {
     setSelectedCategories([])
     setProgress(null)
 
+    let coordinates
     try {
-      const coordinates = currentPolygon.map(coord => {
+      coordinates = currentPolygon.map(coord => {
         if (!coord || typeof coord.lng !== 'number' || typeof coord.lat !== 'number') {
           throw new Error('Invalid coordinate format')
         }
         return [coord.lng, coord.lat]
       })
-
-      const response = await fetch('/api/process-polygon', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ coordinates })
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-
-        // Store (or replace) the tracking entry for this polygon; the polling
-        // effect picks it up from its 'processing' status
-        setPolygonData(prev => ({
-          ...prev,
-          [currentPolygonId]: {
-            taskId: result.task_id,
-            coords: currentPolygon,
-            status: 'processing'
-          }
-        }))
-
-        setProgress(result)
-      } else {
-        try {
-          const errorData = await response.json()
-          console.error('Backend error response:', errorData)
-
-          let errorMessage = 'Failed to start processing'
-          if (errorData.detail) {
-            if (typeof errorData.detail === 'string') {
-              errorMessage = errorData.detail
-            } else if (Array.isArray(errorData.detail)) {
-              errorMessage = errorData.detail.map(err => err.msg || 'Validation error').join(', ')
-            } else if (typeof errorData.detail === 'object') {
-              errorMessage = errorData.detail.msg || 'Validation error'
-            }
-          } else if (errorData.message) {
-            errorMessage = errorData.message
-          }
-
-          setError(errorMessage)
-        } catch (parseError) {
-          console.error('Error parsing error response:', parseError)
-          setError(`HTTP ${response.status}: Failed to start processing`)
-        }
-      }
     } catch (err) {
-      console.error('Error starting processing:', err)
-      setError('Failed to connect to backend')
+      console.error('Invalid polygon coordinates:', err)
+      setError('Invalid polygon data')
+      return
+    }
+
+    // Track this polygon as processing; the merge effect picks up its data
+    // once the fetch completes
+    setPolygonData(prev => ({
+      ...prev,
+      [currentPolygonId]: {
+        coords: currentPolygon,
+        status: 'processing'
+      }
+    }))
+
+    try {
+      const data = await fetchBuildingsInPolygon(coordinates, setProgress)
+
+      setPolygonData(prev => {
+        if (!prev[currentPolygonId]) return prev // polygon was removed mid-fetch
+        return {
+          ...prev,
+          [currentPolygonId]: { ...prev[currentPolygonId], status: 'completed', data }
+        }
+      })
+    } catch (err) {
+      console.error('Error fetching buildings:', err)
+      setError(err.message || 'Failed to fetch building data')
+      setPolygonData(prev => {
+        if (!prev[currentPolygonId]) return prev
+        return {
+          ...prev,
+          [currentPolygonId]: { ...prev[currentPolygonId], status: 'error' }
+        }
+      })
     }
   }
 
