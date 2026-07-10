@@ -85,7 +85,7 @@ BuildingData/
 
 ## Deployment
 
-Every push to `main` triggers the **Deploy to GitHub Pages** workflow, which builds the app with the `/BuildingData/` base path and publishes it to GitHub Pages. No configuration needed beyond pushing.
+Every push to `main` triggers the **Deploy to GitHub Pages** workflow, which builds the app and publishes it to GitHub Pages at the custom domain **buildings.vitna.ir** (a Cloudflare CNAME pointing to `dshaterzadeh.github.io`). No configuration needed beyond pushing.
 
 ## Data notes
 
