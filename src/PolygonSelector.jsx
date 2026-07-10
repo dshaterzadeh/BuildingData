@@ -9,10 +9,15 @@ import 'leaflet-draw/dist/leaflet.draw.css';
 
 // Map layer options
 const MAP_LAYERS = {
-  osm: {
+  streets: {
     name: 'Street Map',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap contributors'
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  },
+  minimal: {
+    name: 'Minimal',
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
   },
   satellite: {
     name: 'Satellite',
@@ -125,7 +130,7 @@ function PolygonHoverFocus({ highlightedPolygon }) {
 
 function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selectedBuilding }) {
   const [drawnItems, setDrawnItems] = useState(new L.FeatureGroup());
-  const [currentLayer, setCurrentLayer] = useState('osm');
+  const [currentLayer, setCurrentLayer] = useState('streets');
   const [polygons, setPolygons] = useState([]); // Store multiple polygons
   const [focusOnNewPolygon, setFocusOnNewPolygon] = useState(false);
   const [newPolygonCoords, setNewPolygonCoords] = useState(null);
@@ -337,6 +342,8 @@ function PolygonSelector({ onPolygonDrawn, buildingsData, onBuildingClick, selec
           key={currentLayer}
           url={MAP_LAYERS[currentLayer].url}
           attribution={MAP_LAYERS[currentLayer].attribution}
+          maxZoom={20}
+          maxNativeZoom={currentLayer === 'terrain' ? 17 : 19}
         />
 
         {/* Display buildings if available */}
