@@ -4,6 +4,9 @@ A fully client-side web application for analyzing building data from OpenStreetM
 
 **Live app:** https://buildings.vitna.ir/
 
+![2D Map View](images/screen1.png)
+![3D City View](images/screen2.png)
+
 There is no server: the browser queries the Overpass API directly, assembles geometries (including multipolygon relations with courtyards), filters buildings to your polygon, and computes all derived metrics locally.
 
 ## Features
